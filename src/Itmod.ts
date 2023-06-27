@@ -1,14 +1,13 @@
-import { isArray, isIterable } from "./collections/is";
-import { asIterable, range } from "./collections/iterables";
-import { identity, resultOf, returns } from "./functional";
+import { asArray, asIterable } from "./collections/as";
+import { isArray } from "./collections/is";
 import {
-    requireIntegerOrInfinity,
-    requireNonNaN,
-    requireNonNegative,
-    requireNumberToBe,
-} from "./require";
+    cachingIterable as cachedIterable,
+    range,
+} from "./collections/iterables";
+import NeverEndingOperationError from "./errors/NeverEndingOperationError";
+import { identity, resultOf, returns } from "./functional";
+import { requireIntegerOrInfinity, requireNonNegative } from "./require";
 import { BreakSignal, breakSignal } from "./signals";
-import { Order, asComparator, autoComparator } from "./sorting";
 import { General } from "./types/literals";
 
 export type Comparison =
@@ -370,5 +369,99 @@ export default class Itmod<T> implements Iterable<T> {
 
             return finalize(accumulator, count);
         };
+    }
+
+    public get concat() {
+        const self = this;
+        return function concat<O>(other: Iterable<O>): Itmod<T | O> {
+            return new Itmod(
+                { infinite: self.properties.infinite },
+                function* () {
+                    yield* self;
+                    yield* other;
+                }
+            );
+        };
+    }
+
+    public get preConcat() {
+        const self = this;
+        return function preConcat<O>(other: Iterable<O>): Itmod<T | O> {
+            return new Itmod(
+                { infinite: self.properties.infinite },
+                function* () {
+                    yield* other;
+                    yield* self;
+                }
+            );
+        };
+    }
+
+    public get reverse() {
+        this.requireSelfNotInfinite(
+            "cannot reverse an infinite number of values"
+        );
+
+        const self = this;
+        return function reverse(): Itmod<T> {
+            return new Itmod(
+                { infinite: self.properties.infinite },
+                function* () {
+                    const source = self.getSource();
+                    const array = asArray(source);
+                    for (let i = array.length - 1; i >= 0; i--) {
+                        yield array[i];
+                    }
+                }
+            );
+        };
+    }
+
+    public get repeat() {
+        const self = this;
+        return function repeat(times: number | bigint): Itmod<T> {
+            requireIntegerOrInfinity(times);
+            if (times < 0) {
+                return self.reverse().repeat(-times);
+            }
+
+            if (self.properties.infinite) {
+                return self;
+            }
+
+            if (times === Infinity) {
+                return new Itmod({ infinite: true }, function* () {
+                    const source = self.getSource();
+
+                    const cached = isArray(source)
+                        ? source
+                        : cachedIterable(source);
+
+                    while (true) {
+                        yield* cached;
+                    }
+                });
+            }
+
+            return new Itmod({}, function* () {
+                const source = self.getSource();
+                const cached = isArray(source)
+                    ? source
+                    : cachedIterable(source);
+                for (
+                    let i = typeof times === "number" ? 0 : 0n;
+                    i < times;
+                    i++
+                ) {
+                    yield* cached;
+                }
+            });
+        };
+    }
+
+    private requireSelfNotInfinite(errorMessage: string | (() => string)) {
+        if (this.properties.infinite) {
+            throw new NeverEndingOperationError(resultOf(errorMessage));
+        }
     }
 }

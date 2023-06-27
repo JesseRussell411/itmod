@@ -1,3 +1,4 @@
+import { asiterator } from "./as";
 import { isIterable } from "./is";
 
 /** A clone of python's range function */
@@ -86,17 +87,24 @@ export function emptyIterator<T>(): Iterator<T> {
     };
 }
 
-export function asIterable<T>(value: Iterator<T> | Iterable<T>): Iterable<T> {
-    if (isIterable(value)) {
-        return value;
-    } else {
-        let iterator = value;
-        return {
-            [Symbol.iterator]() {
-                const result = iterator;
-                iterator = emptyIterator();
-                return result;
-            },
-        };
-    }
+export function cachingIterable<T>(iterable: Iterable<T> | Iterator<T>) {
+    const cache: T[] = [];
+    const iterator = asiterator(iterable);
+
+    return {
+        *[Symbol.iterator]() {
+            let i = 0;
+            while (true) {
+                if (i < cache.length) {
+                    yield cache[i];
+                } else {
+                    const next = iterator.next();
+                    if (next.done) return;
+                    cache.push(next.value);
+                    yield next.value;
+                }
+                i++;
+            }
+        },
+    };
 }
