@@ -111,24 +111,4 @@ export function cachingIterable<T>(iterable: Iterable<T> | Iterator<T>) {
     };
 }
 
-/**
- * Attemps to determine the number of values in the {@link Iterable} without iterating it.
- * @param iterable
- * @returns The size of the {@link Iterable} or undefined if it couldn't be determined without iterating it.
- */
-export function nonIteratedCountOrUndefined(
-    iterable: Iterable<any>
-): number | undefined {
-    if (Array.isArray(iterable)) return iterable.length;
-    if (
-        iterable instanceof Set ||
-        iterable instanceof Map ||
-        iterable instanceof SortedMap
-    ) {
-        return iterable.size;
-    }
 
-    if (iterable instanceof Itmod) {
-        return iterable.nonIteratedCountOrUndefined();
-    }
-}

@@ -3,6 +3,7 @@
  * @returns  - positive: first > second
  *  - negative: first < second
  *  - 0: first = second
+ *  - {@link NaN}: first = second
  */
 export type Comparator<T> = (a: T, b: T) => number;
 /**
@@ -44,14 +45,14 @@ export function isField<T>(order: Order<T>): order is Field<T> {
  */
 export function asComparator<T>(order: Order<T>): Comparator<T> {
     if (order instanceof Function) {
-        if (order.length === 1) {
+        if (order.length >= 2) {
+            return order as Comparator<T>;
+        } else {
             return (a: T, b: T) =>
                 autoComparator(
                     (order as FieldSelector<T>)(a),
                     (order as FieldSelector<T>)(b)
                 );
-        } else {
-            return order as Comparator<T>;
         }
     } else {
         return (a: T, b: T) => autoComparator(a[order], b[order]);
@@ -64,9 +65,9 @@ export function asComparator<T>(order: Order<T>): Comparator<T> {
  * Compares by type first. The types in ascending order are:
  *  - undefined*
  *  - null
- *  - boolean, Boolean
- *  - number, bigint, Number, BigInt
- *  - string, String
+ *  - boolean/{@link Boolean}
+ *  - number/{@link Number}, bigint/{@link BigInt}
+ *  - string/{@link String}
  *  - symbol
  *  - {@link Date}
  *  - {@link Array}
@@ -74,9 +75,9 @@ export function asComparator<T>(order: Order<T>): Comparator<T> {
  *  - function
  *
  * Compares by value second:
- *  - boolean, Boolean: false comes before true
- *  - number, bigint, Number, BigInt: lower values come before higher values
- *  - string, String: the result of {@link String.localeCompare}
+ *  - boolean/Boolean: false comes before true
+ *  - number/{@link Number}, bigint/{@link BigInt}: lower values come before higher values; additionaly, number/{@link Number} and bigint/{@link BigInt} are mixed so that 2 comes before 4n and 4n comes before 5.5, etc.
+ *  - string/{@link String}: the result of {@link String.localeCompare}
  *  - {@link Date}: earlier {@link Date}s come before later {@link Date}s
  *  - the rest: not compared, 0 is returned
  *
@@ -86,8 +87,6 @@ export const autoComparator: Comparator<unknown> = (
     a: unknown,
     b: unknown
 ): number => {
-    // TODO! add wrapper class support (Number, Boolean, etc.)
-
     // TYPE RATINGS:
 
     // undefined* -- 0
@@ -105,8 +104,7 @@ export const autoComparator: Comparator<unknown> = (
     // function   -- 9
 
     // * -- Array.sort ignores undefined items and just puts them
-    // all at the end regardless of the comparator, making this rating
-    // effectively "for completeness" but otherwise pointless.
+    // all at the end regardless of the comparator. This rating is not pointless though as it will still be used when sorting values by a field isntead of the value directly
 
     // type
     const typeRatingA = rateType(a);
@@ -119,7 +117,6 @@ export const autoComparator: Comparator<unknown> = (
     switch (typeRatingA) {
         // undefined
         case 0:
-            // pointless for reason stated above
             return 0;
 
         // null
@@ -130,9 +127,9 @@ export const autoComparator: Comparator<unknown> = (
         case 2: {
             const A = (a as boolean | Boolean).valueOf();
             const B = (b as boolean | Boolean).valueOf();
-            if (A.valueOf() === B.valueOf()) {
+            if (A === B) {
                 return 0;
-            } else if (A.valueOf() === true) {
+            } else if (A === true) {
                 return 1;
             } else {
                 return -1;
@@ -186,9 +183,6 @@ export const autoComparator: Comparator<unknown> = (
         // TODO? replace switch with Map or object if better performance
 
         switch (typeof item) {
-            // this case will actually be ignored by javascript
-            // Array.sort doesn't actually sort undefined values.
-            // It just puts all the undefineds at the end of the array even if the comparator says otherwise.
             case "undefined":
                 return 0;
 
@@ -207,9 +201,9 @@ export const autoComparator: Comparator<unknown> = (
             case "symbol":
                 return 5;
 
-            // date -- 7
+            // date -- 6
 
-            // array -- 6
+            // array -- 7
 
             case "object":
                 if (item === null) return 1;

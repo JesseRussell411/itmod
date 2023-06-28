@@ -1,17 +1,30 @@
 import { asArray, asIterable } from "./collections/as";
-import { isArray, isArrayAsWritable, isSet } from "./collections/is";
+import {
+    isArray,
+    isArrayAsWritable,
+    isSet,
+    isSetAsWritable,
+} from "./collections/is";
 import {
     cachingIterable as cachedIterable,
-    nonIteratedCountOrUndefined,
     range,
 } from "./collections/iterables";
 import NeverEndingOperationError from "./errors/NeverEndingOperationError";
 import NotImplementedError from "./errors/NotImplementedError";
 import { identity, resultOf, returns } from "./functional";
-import { requireIntegerOrInfinity, requireNonNegative } from "./require";
+import {
+    requireIntegerOrInfinity,
+    requireNonNegative,
+    requireSafeInteger,
+} from "./require";
 import { BreakSignal, breakSignal } from "./signals";
+import { Comparator, Order, asComparator, autoComparator } from "./sorting";
+import {
+    max,
+    min,
+    nonIteratedCountOrUndefined,
+} from "./transformations/iterable";
 import { General } from "./types/literals";
-import SortedMap from "./collections/SortedMap";
 
 export type Comparison =
     | "equals"
@@ -298,7 +311,7 @@ export default class Itmod<T> implements Iterable<T> {
         ): any {
             const source = self.getSource();
 
-            // in case of array optimization
+            // array optimization
             if (isArray(source)) {
                 if (source.length === 0) {
                     return finalize(undefined, 0);
@@ -344,7 +357,7 @@ export default class Itmod<T> implements Iterable<T> {
         ) {
             const source = self.getSource();
 
-            // in case of array optimization
+            // array optimization
             if (isArray(source)) {
                 if (source.length === 0) {
                     return finalize(initialValue, 0);
@@ -464,7 +477,7 @@ export default class Itmod<T> implements Iterable<T> {
 
     public get take() {
         const self = this;
-        return function take(count: number | bigint) {
+        return function take(count: number | bigint): Itmod<T> {
             requireNonNegative(requireIntegerOrInfinity(count));
             if (count === Infinity) return self;
 
@@ -496,7 +509,7 @@ export default class Itmod<T> implements Iterable<T> {
 
     public get skip() {
         const self = this;
-        return function skip(count: number | bigint) {
+        return function skip(count: number | bigint): Itmod<T> {
             requireNonNegative(requireIntegerOrInfinity(count));
             if (count === 0) return self;
             if (count === Infinity) return Itmod.of();
@@ -529,7 +542,9 @@ export default class Itmod<T> implements Iterable<T> {
     }
 
     public get takeFinal() {
-        throw new NotImplementedError();
+        return function takeFinal(count: number | bigint): Itmod<T> {
+            throw new NotImplementedError();
+        };
     }
     public get skipFinal() {
         throw new NotImplementedError();
@@ -566,6 +581,95 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    public get min() {
+        this.requireSelfNotInfinite(
+            "cannot get the smallest of infinite values"
+        );
+        const self = this;
+        const externalMin = min;
+        return function min(
+            count: number | bigint,
+            comparator: Comparator<T> = autoComparator
+        ) {
+            requireSafeInteger(requireNonNegative(count));
+            return new Itmod({}, () => externalMin(self, count, comparator));
+        };
+    }
+
+    public get max() {
+        this.requireSelfNotInfinite(
+            "cannot get the largest of infinite values"
+        );
+        const self = this;
+        const externalMax = max;
+        return function max(
+            count: number | bigint,
+            comparator: Comparator<T> = autoComparator
+        ) {
+            requireSafeInteger(requireNonNegative(count));
+            return new Itmod({}, () => externalMax(self, count, comparator));
+        };
+    }
+
+    public get toArray() {
+        const self = this;
+        return function toArray(): T[] {
+            const source = self.getSource();
+            if (self.properties.fresh && isArrayAsWritable(source)) {
+                return source;
+            } else {
+                return [...source];
+            }
+        };
+    }
+
+    public get toSet() {
+        const self = this;
+        return function toSet(): Set<T> {
+            const source = self.getSource();
+            if (self.properties.fresh && isSetAsWritable(source)) {
+                return source;
+            } else {
+                return new Set(source);
+            }
+        };
+    }
+
+    public get asArray() {
+        const self = this;
+        return function toArray(): readonly T[] {
+            const source = self.getSource();
+            if (isArray(source)) {
+                return source;
+            } else {
+                return [...source];
+            }
+        };
+    }
+
+    public get asSet() {
+        const self = this;
+        return function toSet(): ReadonlySet<T> {
+            const source = self.getSource();
+            if (isSet(source)) {
+                return source;
+            } else {
+                return new Set(source);
+            }
+        };
+    }
+
+    public get sort() {
+        const self = this;
+        return function sort(...orders: Order<T>[]): SortedItmod<T> {
+            return new SortedItmod(
+                self.properties,
+                self.getSource,
+                orders.length === 0 ? [autoComparator] : orders
+            );
+        };
+    }
+
     private requireSelfNotInfinite(errorMessage: string | (() => string)) {
         if (this.properties.infinite) {
             throw new NeverEndingOperationError(resultOf(errorMessage));
@@ -599,6 +703,7 @@ export class MappedItmod<T, R> extends Itmod<R> {
     public get skip() {
         const self = this;
         return function skip(count: number | bigint) {
+            requireNonNegative(requireIntegerOrInfinity(count));
             return new Itmod({}, function* () {
                 const source = self.originalGetSource();
                 if (isArray(source)) {
@@ -608,17 +713,16 @@ export class MappedItmod<T, R> extends Itmod<R> {
                 } else {
                     const iterator = source[Symbol.iterator]();
                     let next = iterator.next();
-                    let i = typeof count === "number" ? 0 : 0n;
+                    let i = 0;
                     for (; i < count; i++) {
                         if (next.done) return;
                         next = iterator.next();
                     }
 
-                    let j = Number(i);
                     while (!next.done) {
-                        yield self.mapping(next.value, j);
+                        yield self.mapping(next.value, i);
                         next = iterator.next();
-                        j++;
+                        i++;
                     }
                 }
             });
@@ -631,5 +735,88 @@ export class MappedItmod<T, R> extends Itmod<R> {
 
     public get skipSparse() {
         throw new NotImplementedError();
+    }
+}
+
+export class SortedItmod<T> extends Itmod<T> {
+    private readonly orders: readonly Order<T>[];
+    private readonly comparator: Comparator<T>;
+    private readonly originalGetSource: () => Iterable<T>;
+    private readonly originalProperties: ItmodProperties<T>;
+    public constructor(
+        properties: ItmodProperties<T>,
+        getSource: () => Iterable<T>,
+        orders: readonly Order<T>[],
+        { preSorted = false }: { preSorted?: boolean } = {}
+    ) {
+        super(
+            preSorted !== undefined
+                ? properties
+                : { fresh: true, expensive: true },
+            preSorted
+                ? getSource
+                : () => {
+                      const source = getSource();
+                      const array =
+                          properties.fresh && isArrayAsWritable(source)
+                              ? source
+                              : [...source];
+
+                      array.sort(comparator);
+
+                      return array;
+                  }
+        );
+
+        this.orders = orders;
+        this.originalGetSource = getSource;
+        this.originalProperties = properties;
+
+        const comparators = orders.map(asComparator);
+        const comparator = (a: T, b: T) => {
+            for (const comparator of comparators) {
+                const cmp = comparator(a, b);
+                if (cmp !== 0) return cmp;
+            }
+            return 0;
+        };
+        this.comparator = comparator;
+    }
+
+    public get take() {
+        const self = this;
+        return function take(count: number | bigint): SortedItmod<T> {
+            requireNonNegative(requireIntegerOrInfinity(count));
+            return new SortedItmod<T>(
+                { fresh: true, expensive: true },
+                () => min(self, count, self.comparator),
+                self.orders,
+                { preSorted: true }
+            );
+        };
+    }
+
+    public get takeFinal() {
+        const self = this;
+        return function takeFinal(count: number | bigint): SortedItmod<T> {
+            requireNonNegative(requireIntegerOrInfinity(count));
+            return new SortedItmod<T>(
+                { fresh: true, expensive: true },
+                () => max(self, count, self.comparator),
+                self.orders,
+                { preSorted: true }
+            );
+        };
+    }
+
+    public get thenBy() {
+        const self = this;
+        return function thenBy(...orders: Order<T>[]): SortedItmod<T> {
+            return new SortedItmod(
+                self.originalProperties,
+                self.originalGetSource,
+                [...self.orders, ...orders]
+            );
+        };
     }
 }

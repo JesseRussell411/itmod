@@ -1,7 +1,8 @@
-// avl tree implementation with no dependencies
+// avl tree implementation with *no dependencies*
 
-import { resultOf } from "../functional";
-import { Comparator } from "../sorting";
+import { doNothing, resultOf } from "../functional";
+import { requireSafeInteger } from "../require";
+import { Comparator, Order, asComparator, autoComparator } from "../sorting";
 import Collection from "./Collection";
 import { MapEntry } from "./MapEntry";
 
@@ -14,20 +15,32 @@ export default class SortedMap<K, V> implements Collection<MapEntry<K, V>> {
     private comparator: Comparator<K>;
     private _size: number = 0;
 
+    /**
+     * How many entries are in the {@link SortedMap}.
+     */
     public get size() {
         return this._size;
     }
 
+    /**
+     * Whether the {@link SortedMap} contains no entries.
+     */
     public get isEmpty() {
         return this.size <= 0;
     }
 
+    /**
+     * Whether the {@link SortedMap} contains any entries.
+     */
     public get notEmpty() {
         return !this.isEmpty;
     }
 
-    public constructor(comparator: (a: K, b: K) => number) {
-        this.comparator = comparator;
+    /**
+     * @param order How to compare the keys. Defaults to {@link autoComparator}.
+     */
+    public constructor(order: Order<K> = autoComparator) {
+        this.comparator = asComparator(order);
     }
 
     public *[Symbol.iterator]() {
@@ -37,15 +50,17 @@ export default class SortedMap<K, V> implements Collection<MapEntry<K, V>> {
         }
     }
 
+    // TODO keys() and values() and entries() that return iterables of keys and values and entries like in Map
+
     /**
      * Inserts the key into the tree.
      *
      * @returns Whether the key wasn't already in the tree.
      *
      * @param key The key to insert.
-     * @param overwrite If the key is already in the tree, it is overwritten with the output of this function. Defaults to overwriting the existing key.
+     * @param overwrite If the key is already in the tree, it is overwritten with the output of this function. Defaults to overwriting the existing value.
      */
-    public put(
+    public set(
         key: K,
         value: V,
         overwrite: (
@@ -57,7 +72,10 @@ export default class SortedMap<K, V> implements Collection<MapEntry<K, V>> {
             value: V,
             /** The key that was suppose to be inserted. */
             key: K
-        ) => V = () => value
+        ) => readonly [overwriteKey: boolean, value: V] = (_, __, value) => [
+            true,
+            value,
+        ]
     ): boolean {
         // if root is null, add root node
         if (undefined === this.root) {
@@ -73,12 +91,16 @@ export default class SortedMap<K, V> implements Collection<MapEntry<K, V>> {
                     key,
                     value,
                     (location) => {
-                        location.value = overwrite(
+                        const [overwriteKey, newValue] = overwrite(
                             location.value,
                             location.key,
                             value,
                             key
                         );
+                        location.value = newValue;
+                        if (overwriteKey) {
+                            location.key = key;
+                        }
                     },
                     () => {
                         inserted = true;
@@ -110,35 +132,57 @@ export default class SortedMap<K, V> implements Collection<MapEntry<K, V>> {
 
     /**
      * Gets the key that matches the given key based on the comparator.
-     * @param key
-     * @returns
+     * @returns The key or undefined if it does not exist in the {@link SortedMap}.
      */
     public getKey(key: K): K | undefined {
         return this.root?.locate(this.comparator, key)?.key ?? undefined;
     }
 
+    /**
+     * Gets the entry whith the key that matches the given key according to the comparator.
+     * @returns The entry or undefined if it does not exist in the {@link SortedMap}.
+     */
     public getEntry(key: K): MapEntry<K, V> | undefined {
         return this.root?.locate(this.comparator, key)?.entry ?? undefined;
     }
 
-    public getKeyOrPut(key: K, newValue: V | (() => V)): K {
+    /**
+     * Gets the key that matches the given key according to the comparator. If the key is not found, it is inserted with the given value or the result of the given function.
+     * @param newValue The value to insert if the key is not found. If this is a function, its result will be used instead.
+     * @returns The key that matches the given key or the given key if it was not found.
+     */
+    public getKeyOrSet(key: K, newValue: V | (() => V)): K {
         return this.locateOrInsert(key, newValue).location.key;
     }
 
-    public getValueOrPut(key: K, newValue: V | (() => V)): V {
+    /**
+     * Gets the value that is mapped to the given key according to the comparator. If the key is not found, it is inserted with the given value or the result of the given function.
+     * @param newValue The value to insert if the key is not found. If this is a function, its result will be used instead.
+     * @returns The value that was mapped to the key or the inserted value if the key was not found.
+     */
+    public getOrSet(key: K, newValue: V | (() => V)): V {
         return this.locateOrInsert(key, newValue).location.value;
     }
 
-    public getEntryOrPut(key: K, newValue: V | (() => V)): MapEntry<K, V> {
+    /**
+     * Gets the entry that is mapped to the given key according to the comparator. If the key is not found, it is inserted with the given value or the result of the given function.
+     * @param newValue The value to insert if the key is not found. If this is a function, its result will be used instead.
+     * @returns The entry that was mapped to the key or the inserted entry if the key was not found.
+     */
+    public getEntryOrSet(key: K, newValue: V | (() => V)): MapEntry<K, V> {
         return this.locateOrInsert(key, newValue).location.entry;
     }
 
+    /**
+     * @param key The key to look for a match for.
+     * @returns Whether the {@link SortedMap} contains a matching key.
+     */
     public hasKey(key: K): boolean {
         return this.root?.locate(this.comparator, key) !== undefined;
     }
 
     /**
-     * Removes an the entry form the map with the given key.
+     * Removes the entry with the given key from the {@link SortedMap}.
      * @returns The entry that was removed or undefined if the key wasn't found and no entry was removed.
      */
     public delete(key: K): MapEntry<K, V> | undefined {
@@ -158,15 +202,73 @@ export default class SortedMap<K, V> implements Collection<MapEntry<K, V>> {
         return removedNode?.entry;
     }
 
-    public getGreatest(): MapEntry<K, V> | undefined {
-        return this.root?.rightMostSubNode.entry;
+    /**
+     * Deletes the entry with the largest key.
+     */
+    public deleteGreatest(): MapEntry<K, V> | undefined {
+        let deletedEntry: MapEntry<K, V> | undefined = undefined;
+        this.root?.removeLargest(
+            (deletedNode) => (deletedEntry = deletedNode.entry)
+        );
+        return deletedEntry;
     }
 
-    public getLeast(): MapEntry<K, V> | undefined {
-        return this.root?.leftMostSubNode.entry;
+    /**
+     * Deletes the entry with the smallest key.
+     */
+    public deleteLeast(): MapEntry<K, V> | undefined {
+        let deletedEntry: MapEntry<K, V> | undefined = undefined;
+        this.root?.removeSmallest(
+            (deletedNode) => (deletedEntry = deletedNode.entry)
+        );
+        return deletedEntry;
     }
 
-    public *getRange(lowerBound: K, upperBound: K): Generator<MapEntry<K, V>> {
+    /**
+     * @param index The index at which the {@link MapEntry} would appear. Negative values count from the end starting at -1; -1 being the final item, -2 being the second to final item, etc.
+     * @returns The {@link MapEntry} that would appear at the given index when iterating this {@link SortedMap}.
+     */
+    public at(index: number): MapEntry<K, V> | undefined {
+        requireSafeInteger(index);
+        if (index < 0) {
+            if (-index > this.size) {
+                throw new Error(
+                    `index ${index} out of bounds -${this.size} <= index < 0`
+                );
+            }
+            return this.at(this.size + index);
+        }
+        if (index >= this.size) {
+            throw new Error(
+                `index ${index} out of bounds 0 <= index < ${this.size}`
+            );
+        }
+        return this.root?.at(index)?.entry;
+    }
+
+    /**
+     *
+     * @param index The index at which the key would appear. Negative values count from the end starting at -1; -1 being the final item, -2 being the second to final item, etc.
+     * @returns The key that would appear at the given index when iterating this {@link SortedMap}.
+     */
+    public keyAt(index: number): K | undefined {
+        return this.at(index)?.[0];
+    }
+
+    /**
+     * @param index The index at which the key would appear. Negative values count from the end starting at -1; -1 being the final item, -2 being the second to final item, etc.
+     * @returns The value that would appear at the given index when iterating this {@link SortedMap}.
+     */
+    public valueAt(index: number): V | undefined {
+        return this.at(index)?.[1];
+    }
+
+    /**
+     * @param lowerBound The lowest possible key to return (inclusive lower bound).
+     * @param upperBound What all keys returned must be less than (exclusive upper bound).
+     * @returns A {@link Generator} over the range of entries specified.
+     */
+    public *range(lowerBound: K, upperBound: K): Generator<MapEntry<K, V>> {
         if (undefined === this.root) return;
         for (const node of this.root.range(
             this.comparator,
@@ -175,12 +277,6 @@ export default class SortedMap<K, V> implements Collection<MapEntry<K, V>> {
         )) {
             yield node.entry;
         }
-    }
-
-    public removeGreatest(): void {
-        if (undefined === this.root) return;
-        this.root = this.root.removeGreatest();
-        this._size--;
     }
 
     private locateOrInsert(
@@ -216,15 +312,22 @@ export default class SortedMap<K, V> implements Collection<MapEntry<K, V>> {
 function calcBalanceFactor(
     left: Node<any, any> | undefined,
     right: Node<any, any> | undefined
-) {
+): number {
     return (right?._depth ?? 0) - (left?._depth ?? 0);
 }
 
 function calcDepth(
     left: Node<any, any> | undefined,
     right: Node<any, any> | undefined
-) {
+): number {
     return Math.max(right?.depth ?? -1, left?.depth ?? -1) + 1;
+}
+
+function calcNodeCount(
+    left: Node<any, any> | undefined,
+    right: Node<any, any> | undefined
+): number {
+    return (left?.nodeCount ?? 0) + (right?.nodeCount ?? 0) + 1;
 }
 
 class Node<K, V = undefined> implements Iterable<Node<K, V>> {
@@ -236,6 +339,8 @@ class Node<K, V = undefined> implements Iterable<Node<K, V>> {
     _left: Node<K, V> | undefined;
     //@ts-ignore
     _right: Node<K, V> | undefined;
+
+    _nodeCount: number;
 
     _depth: number;
 
@@ -277,6 +382,10 @@ class Node<K, V = undefined> implements Iterable<Node<K, V>> {
         return this._depth;
     }
 
+    public get nodeCount() {
+        return this._nodeCount;
+    }
+
     public constructor(
         key: K,
         value: V,
@@ -288,6 +397,19 @@ class Node<K, V = undefined> implements Iterable<Node<K, V>> {
         if (undefined !== left) this._left = left;
         if (undefined !== right) this._right = right;
         this._depth = calcDepth(left, right);
+        this._nodeCount = calcNodeCount(left, right);
+    }
+
+    public at(index: number): Node<K, V> | undefined {
+        const leftNodeCount = this.left?.nodeCount ?? 0;
+        if (index < leftNodeCount) {
+            return this.left?.at(index);
+        } else if (index > leftNodeCount) {
+            return this.right?.at(index - leftNodeCount);
+        } else {
+            // index === leftNodeCount
+            return this;
+        }
     }
 
     public *[Symbol.iterator](): Iterator<Node<K, V>> {
@@ -297,6 +419,13 @@ class Node<K, V = undefined> implements Iterable<Node<K, V>> {
         if (undefined !== this.right) yield* this.right;
     }
 
+    /**
+     *
+     * @param comparator
+     * @param lowerBound inclusive
+     * @param upperBound exclusive
+     * @returns
+     */
     public *range(
         comparator: (a: K, b: K) => number,
         lowerBound: K,
@@ -322,6 +451,7 @@ class Node<K, V = undefined> implements Iterable<Node<K, V>> {
 
     public update(): void {
         this._depth = calcDepth(this._left, this._right);
+        this._nodeCount = calcNodeCount(this._left, this._right);
     }
 
     public rotateLeft(): Node<K, V> {
@@ -464,12 +594,29 @@ class Node<K, V = undefined> implements Iterable<Node<K, V>> {
     /**
      * @returns The {@link Node} that replaces this one.
      */
-    public removeGreatest(): Node<K, V> | undefined {
-        if (undefined !== this.right) {
-            this.right = this.right.removeGreatest();
-            return this.balance();
-        } else {
+    public removeLargest(
+        getRemovedNode: (node: Node<K, V>) => void = doNothing
+    ): Node<K, V> | undefined {
+        if (this.right === undefined) {
+            getRemovedNode(this);
             return this.left;
+        } else {
+            this.right = this.right.removeLargest(getRemovedNode);
+            return this.balance();
+        }
+    }
+    /**
+     * @returns The {@link Node} that replaces this one.
+     */
+    public removeSmallest(
+        getRemovedNode: (node: Node<K, V>) => void = doNothing
+    ): Node<K, V> | undefined {
+        if (this.left === undefined) {
+            getRemovedNode(this);
+            return this.right;
+        } else {
+            this.left = this.left.removeSmallest(getRemovedNode);
+            return this.balance();
         }
     }
 
