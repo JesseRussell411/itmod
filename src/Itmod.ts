@@ -1,14 +1,17 @@
 import { asArray, asIterable } from "./collections/as";
-import { isArray } from "./collections/is";
+import { isArray, isArrayAsWritable, isSet } from "./collections/is";
 import {
     cachingIterable as cachedIterable,
+    nonIteratedCountOrUndefined,
     range,
 } from "./collections/iterables";
 import NeverEndingOperationError from "./errors/NeverEndingOperationError";
+import NotImplementedError from "./errors/NotImplementedError";
 import { identity, resultOf, returns } from "./functional";
 import { requireIntegerOrInfinity, requireNonNegative } from "./require";
 import { BreakSignal, breakSignal } from "./signals";
 import { General } from "./types/literals";
+import SortedMap from "./collections/SortedMap";
 
 export type Comparison =
     | "equals"
@@ -459,9 +462,174 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    public get take() {
+        const self = this;
+        return function take(count: number | bigint) {
+            requireNonNegative(requireIntegerOrInfinity(count));
+            if (count === Infinity) return self;
+
+            return new Itmod(
+                {
+                    fresh: self.properties.fresh,
+                    expensive: self.properties.expensive,
+                },
+                () => {
+                    const source = self.getSource();
+                    if (isArrayAsWritable(source)) {
+                        source.length = Math.min(Number(count), source.length);
+                        return source;
+                    }
+
+                    return (function* () {
+                        let i = 0;
+                        if (i >= count) return;
+                        for (const value of source) {
+                            if (i >= count) return;
+                            yield value;
+                            i++;
+                        }
+                    })()[Symbol.iterator]();
+                }
+            );
+        };
+    }
+
+    public get skip() {
+        const self = this;
+        return function skip(count: number | bigint) {
+            requireNonNegative(requireIntegerOrInfinity(count));
+            if (count === 0) return self;
+            if (count === Infinity) return Itmod.of();
+
+            return new Itmod({}, function* () {
+                const source = self.getSource();
+                if (isArray(source)) {
+                    for (let i = Number(count); i < source.length; i++) {
+                        yield source[i];
+                    }
+                } else {
+                    const iterator = source[Symbol.iterator]();
+                    let next = iterator.next();
+                    for (
+                        let i = typeof count === "number" ? 0 : 0n;
+                        i < count;
+                        i++
+                    ) {
+                        if (next.done) return;
+                        next = iterator.next();
+                    }
+
+                    while (!next.done) {
+                        yield next.value;
+                        next = iterator.next();
+                    }
+                }
+            });
+        };
+    }
+
+    public get takeFinal() {
+        throw new NotImplementedError();
+    }
+    public get skipFinal() {
+        throw new NotImplementedError();
+    }
+
+    public get takeSparse() {
+        throw new NotImplementedError();
+    }
+    public get skipSparse() {
+        throw new NotImplementedError();
+    }
+
+    public get nonIteratedCountOrUndefined() {
+        const self = this;
+        const externalNonIteratedCountOrUndefined = nonIteratedCountOrUndefined;
+        return function nonIteratedCountOrUndefined() {
+            return externalNonIteratedCountOrUndefined(self.getSource());
+        };
+    }
+
+    public get count() {
+        const self = this;
+        return function count(): number {
+            const source = self.getSource();
+            const nonIteratedCount = nonIteratedCountOrUndefined(source);
+            if (nonIteratedCount !== undefined) {
+                return nonIteratedCount;
+            }
+
+            let count = 0;
+            for (const _ of source) count++;
+
+            return count;
+        };
+    }
+
     private requireSelfNotInfinite(errorMessage: string | (() => string)) {
         if (this.properties.infinite) {
             throw new NeverEndingOperationError(resultOf(errorMessage));
         }
+    }
+}
+
+export class MappedItmod<T, R> extends Itmod<R> {
+    protected readonly mapping: (value: T, index: number) => R;
+    protected readonly originalGetSource: () => Iterable<T>;
+    protected readonly originalProperties: ItmodProperties<T>;
+
+    public constructor(
+        properties: ItmodProperties<T>,
+        getSource: () => Iterable<T>,
+        mapping: (value: T, index: number) => R
+    ) {
+        super({ infinite: properties.infinite }, function* () {
+            const source = getSource();
+            let i = 0;
+            for (const value of source) {
+                yield mapping(value, i);
+                i++;
+            }
+        });
+        this.mapping = mapping;
+        this.originalGetSource = getSource;
+        this.originalProperties = properties;
+    }
+
+    public get skip() {
+        const self = this;
+        return function skip(count: number | bigint) {
+            return new Itmod({}, function* () {
+                const source = self.originalGetSource();
+                if (isArray(source)) {
+                    for (let i = Number(count); i < source.length; i++) {
+                        yield self.mapping(source[i], i);
+                    }
+                } else {
+                    const iterator = source[Symbol.iterator]();
+                    let next = iterator.next();
+                    let i = typeof count === "number" ? 0 : 0n;
+                    for (; i < count; i++) {
+                        if (next.done) return;
+                        next = iterator.next();
+                    }
+
+                    let j = Number(i);
+                    while (!next.done) {
+                        yield self.mapping(next.value, j);
+                        next = iterator.next();
+                        j++;
+                    }
+                }
+            });
+        };
+    }
+
+    public get takeSparse() {
+        throw new NotImplementedError();
+    }
+
+    public get skipSparse() {
+        throw new NotImplementedError();
     }
 }
