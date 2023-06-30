@@ -1,4 +1,4 @@
-import { Comparator, autoComparator } from "../sorting";
+import { Order, asComparator, autoComparator } from "../sorting";
 import Collection from "./Collection";
 import SortedMap from "./SortedMap";
 
@@ -16,11 +16,11 @@ export default class SortedSequence<T> implements Collection<T> {
     private index: bigint = -9_223_372_036_854_775_808n; // smallest signed 64 bit integer I think
 
     /**
-     * @param comparator How to compare the values. Defaults to {@link autoComparator}.
+     * @param order How to compare the values. Defaults to {@link autoComparator}.
      * @param sizeLimit Properties of the optional size limit.
      */
     public constructor(
-        comparator: Comparator<T> = autoComparator,
+        order: Order<T> = autoComparator,
         sizeLimit?: {
             /** The maximum number of values to allow in the {@link SortedSequence}. */
             maxSize: number;
@@ -28,6 +28,7 @@ export default class SortedSequence<T> implements Collection<T> {
             keep: "greatest" | "least";
         }
     ) {
+        const comparator = asComparator(order);
         this.data = new SortedMap<Entry<T>, undefined>((a, b) => {
             const cmp = comparator(a.value, b.value);
             if (cmp !== 0) return cmp;

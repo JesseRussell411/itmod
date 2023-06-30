@@ -33,6 +33,9 @@ export type Comparison =
     | "lessThanOrEqualTo"
     | "greaterThanOrEqualTo";
 
+/**
+ * Information about an {@link Itmod} and its Iterable.
+ */
 export type ItmodProperties<_> = Readonly<
     Partial<{
         /**
@@ -48,6 +51,9 @@ export type ItmodProperties<_> = Readonly<
     }>
 >;
 
+/**
+ * Functional wrapper for {@link Iterable}. Provides tranformation functions such as {@link Itmod.map}, {@link Itmod.filter}, {@link Itmod.reduce}, and {@link Itmod.fold};
+ */
 export default class Itmod<T> implements Iterable<T> {
     /**
      * @returns The {@link Iterable} source.
@@ -277,6 +283,10 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * Filters out items that don't pass the test.
+     * @param Test for each item. Items that make this function return true are kept. The rest are skipped.
+     */
     public get filter() {
         const self = this;
         return function filter<R extends T = T>(
@@ -296,12 +306,40 @@ export default class Itmod<T> implements Iterable<T> {
     }
 
     public get reduce(): {
+        /**
+         * Combines all the items into one using the given reducer function.
+         * @param reducer Combines each item with the accumulating result, starting with the first two items.
+         */
         <R = General<T>>(
-            reducer: (accumulator: R | T, value: T, index: number) => R
+            reducer: (
+                /** The accumulating result. Equal to the returned value from the previous item. */
+                accumulator: R | T,
+                /** The current value to add onto the result. */
+                value: T,
+                /** The index of the current value. */
+                index: number
+            ) => R
         ): R;
+        /**
+         * Combines all the items into one using the given reducer function.
+         * @param reducer Combines each item with the accumulating result, starting with the first two items.
+         * @param finalizer Called after the result is collected to perform any final modifications.
+         */
         <F, R = General<T>>(
-            reducer: (accumulator: R | T, value: T, index: number) => R,
-            finalize: (result: R | undefined, count: number) => F
+            reducer: (
+                /** The accumulating result. Equal to the returned value from the previous item. */
+                accumulator: R | T,
+                /** The current value to add onto the result. */
+                value: T,
+                /** The index of the current value. */
+                index: number
+            ) => R,
+            finalize: (
+                /** The final result of the reducer. */
+                result: R | undefined,
+                /** How many items were in the {@link Iterable}. */
+                count: number
+            ) => F
         ): F;
     } {
         const self = this;
@@ -339,10 +377,19 @@ export default class Itmod<T> implements Iterable<T> {
     }
 
     public get fold(): {
+        /**
+         * Combines all the items into one using the given reducer function and initial value.
+         * @param reducer Combines each item with the accumulating result, starting with the initial value and the first item.
+         */
         <R>(
             initialValue: R,
             reducer: (accumulator: R, value: T, index: number) => R
         ): R;
+        /**
+         * Combines all the items into one using the given reducer function and initial value.
+         * @param reducer Combines each item with the accumulating result, starting with the initial value and the first item.
+         * @param finalizer Called after the result is collected to perform any final modifications.
+         */
         <R, F>(
             initialValue: R,
             reducer: (accumulator: R, value: T, index: number) => R,
@@ -387,6 +434,9 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * Concatenates the given {@link Iterable} onto the end of the {@link Itmod}'s iterable.
+     */
     public get concat() {
         const self = this;
         return function concat<O>(other: Iterable<O>): Itmod<T | O> {
@@ -399,7 +449,9 @@ export default class Itmod<T> implements Iterable<T> {
             );
         };
     }
-
+    /**
+     * Concatenates the given {@link Iterable} onto the start of the {@link Itmod}'s iterable.
+     */
     public get preConcat() {
         const self = this;
         return function preConcat<O>(other: Iterable<O>): Itmod<T | O> {
@@ -413,6 +465,9 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * Reverses the items in the {@link Itmod}.
+     */
     public get reverse() {
         this.requireSelfNotInfinite(
             "cannot reverse an infinite number of values"
@@ -433,6 +488,10 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * Repeats the items the given number of times.
+     * @param times How many times to repeat the items. Negative number also reverse the items. 0 returns an empty {@link Itmod}.
+     */
     public get repeat() {
         const self = this;
         return function repeat(times: number | bigint): Itmod<T> {
@@ -475,6 +534,9 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * Keeps the first given number of items, skipping the rest.
+     */
     public get take() {
         const self = this;
         return function take(count: number | bigint): Itmod<T> {
@@ -488,7 +550,7 @@ export default class Itmod<T> implements Iterable<T> {
                 },
                 () => {
                     const source = self.getSource();
-                    if (isArrayAsWritable(source)) {
+                    if (self.properties.fresh && isArrayAsWritable(source)) {
                         source.length = Math.min(Number(count), source.length);
                         return source;
                     }
@@ -507,6 +569,9 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * Skips the first given number of items, keeping the rest.
+     */
     public get skip() {
         const self = this;
         return function skip(count: number | bigint): Itmod<T> {
@@ -541,11 +606,18 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * Takes the final given number of items, skipping the preceding items.
+     */
     public get takeFinal() {
         return function takeFinal(count: number | bigint): Itmod<T> {
             throw new NotImplementedError();
         };
     }
+
+    /**
+     * Skips the final given number of items, skipping the preceding items.
+     */
     public get skipFinal() {
         throw new NotImplementedError();
     }
@@ -557,14 +629,23 @@ export default class Itmod<T> implements Iterable<T> {
         throw new NotImplementedError();
     }
 
+    /**
+     * Attempts to determine how many items are in the {@Iterable} without iterating it.
+     * @returns The number of items or undefined if it couldn't be determined.
+     */
     public get nonIteratedCountOrUndefined() {
         const self = this;
         const externalNonIteratedCountOrUndefined = nonIteratedCountOrUndefined;
         return function nonIteratedCountOrUndefined() {
+            if (self.properties.expensive) return undefined;
             return externalNonIteratedCountOrUndefined(self.getSource());
         };
     }
 
+    /**
+     * Counts how many items are in the {@link Iterable}.
+     * @returns The number of items.
+     */
     public get count() {
         const self = this;
         return function count(): number {
@@ -581,6 +662,11 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * @returns The smallest given number of items.
+     * @param count How many items to return.
+     * @param order How to sort the items.
+     */
     public get min() {
         this.requireSelfNotInfinite(
             "cannot get the smallest of infinite values"
@@ -589,13 +675,18 @@ export default class Itmod<T> implements Iterable<T> {
         const externalMin = min;
         return function min(
             count: number | bigint,
-            comparator: Comparator<T> = autoComparator
+            order: Order<T> = autoComparator
         ) {
             requireSafeInteger(requireNonNegative(count));
-            return new Itmod({}, () => externalMin(self, count, comparator));
+            return new Itmod({}, () => externalMin(self, count, order));
         };
     }
 
+    /**
+     * @returns The smallest given number of items.
+     * @param count How many items to return.
+     * @param order How to sort the items.
+     */
     public get max() {
         this.requireSelfNotInfinite(
             "cannot get the largest of infinite values"
@@ -604,13 +695,16 @@ export default class Itmod<T> implements Iterable<T> {
         const externalMax = max;
         return function max(
             count: number | bigint,
-            comparator: Comparator<T> = autoComparator
+            order: Order<T> = autoComparator
         ) {
             requireSafeInteger(requireNonNegative(count));
-            return new Itmod({}, () => externalMax(self, count, comparator));
+            return new Itmod({}, () => externalMax(self, count, order));
         };
     }
 
+    /**
+     * Copies all the items into an {@link Array}.
+     */
     public get toArray() {
         const self = this;
         return function toArray(): T[] {
@@ -623,6 +717,9 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * Copies all the items into a {@link Set}.
+     */
     public get toSet() {
         const self = this;
         return function toSet(): Set<T> {
@@ -635,6 +732,9 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * If the {@link Iterable} is an {@link Array}, returns that {@link Set} as readonly; otherwise, copies all the items into an {@link Array} and returns that.
+     */
     public get asArray() {
         const self = this;
         return function toArray(): readonly T[] {
@@ -647,6 +747,9 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * If the {@link Iterable} is a {@link Set}, returns that {@link Set}] as readonly; otherwise, copies all the items into a {@link Set} and returns that.
+     */
     public get asSet() {
         const self = this;
         return function toSet(): ReadonlySet<T> {
@@ -659,6 +762,10 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * Sorts the items.
+     * @param orders How to sort the items. Defaults to {@link autoComparator}.
+     */
     public get sort() {
         const self = this;
         return function sort(...orders: Order<T>[]): SortedItmod<T> {
@@ -670,6 +777,24 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * Sorts the items in descending order.
+     * @param orders How to sort the items. Defaults to {@link autoComparator}.
+     */
+    public get sortDescending() {
+        const self = this;
+        return function sort(...orders: Order<T>[]): SortedItmod<T> {
+            return new SortedItmod(
+                self.properties,
+                self.getSource,
+                orders.length === 0 ? [autoComparator] : orders
+            );
+        };
+    }
+
+    /**
+     * Requires the {@link Itmod} to not be known to be infinite.
+     */
     private requireSelfNotInfinite(errorMessage: string | (() => string)) {
         if (this.properties.infinite) {
             throw new NeverEndingOperationError(resultOf(errorMessage));
@@ -677,6 +802,9 @@ export default class Itmod<T> implements Iterable<T> {
     }
 }
 
+/**
+ * {@link Itmod} With a mapping applied to its items. The result of {@link Itmod.map}.
+ */
 export class MappedItmod<T, R> extends Itmod<R> {
     protected readonly mapping: (value: T, index: number) => R;
     protected readonly originalGetSource: () => Iterable<T>;
@@ -738,6 +866,9 @@ export class MappedItmod<T, R> extends Itmod<R> {
     }
 }
 
+/**
+ * An {@link Itmod} with a sort applied to its items. The result of {@link Itmod.sort}.
+ */
 export class SortedItmod<T> extends Itmod<T> {
     private readonly orders: readonly Order<T>[];
     private readonly comparator: Comparator<T>;
@@ -783,6 +914,31 @@ export class SortedItmod<T> extends Itmod<T> {
         this.comparator = comparator;
     }
 
+    public get skip() {
+        const skip = (count: number | bigint) => {
+            requireNonNegative(requireIntegerOrInfinity(count));
+            return new SortedItmod<T>(
+                {},
+                () => {
+                    const source = this.getSource();
+                    const sourceCount = nonIteratedCountOrUndefined(source);
+                    if (sourceCount === undefined) {
+                        return super.skip(count);
+                    }
+                    if (count >= sourceCount) return [];
+                    return this.takeFinal(
+                        typeof count === "bigint"
+                            ? BigInt(sourceCount) - count
+                            : sourceCount - count
+                    ).getSource();
+                },
+                this.orders,
+                { preSorted: true }
+            );
+        };
+        return skip;
+    }
+
     public get take() {
         const self = this;
         return function take(count: number | bigint): SortedItmod<T> {
@@ -809,7 +965,24 @@ export class SortedItmod<T> extends Itmod<T> {
         };
     }
 
+    /**
+     * Adds more fallback sorts to the {@link SortedItmod}.
+     */
     public get thenBy() {
+        const self = this;
+        return function thenBy(...orders: Order<T>[]): SortedItmod<T> {
+            return new SortedItmod(
+                self.originalProperties,
+                self.originalGetSource,
+                [...self.orders, ...orders]
+            );
+        };
+    }
+
+    /**
+     * Adds more fallback sorts to the {@link SortedItmod} in descending order.
+     */
+    public get thenByDescending() {
         const self = this;
         return function thenBy(...orders: Order<T>[]): SortedItmod<T> {
             return new SortedItmod(

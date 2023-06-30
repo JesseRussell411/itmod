@@ -1,7 +1,7 @@
 import Itmod from "../Itmod";
 import SortedSequence from "../collections/SortedList";
 import SortedMap from "../collections/SortedMap";
-import { Comparator, autoComparator } from "../sorting";
+import { Comparator, Order, autoComparator } from "../sorting";
 
 /**
  * Attemps to determine the number of values in the {@link Iterable} without iterating it.
@@ -28,11 +28,11 @@ export function nonIteratedCountOrUndefined(
 export function min<T>(
     values: Iterable<T>,
     count: number | bigint,
-    comparator: Comparator<T> = autoComparator
+    order: Order<T> = autoComparator
 ): Iterable<T> {
     if (count === 0 || count === 0n) return [];
 
-    const result = new SortedSequence<T>(comparator, {
+    const result = new SortedSequence<T>(order, {
         maxSize: Number(count),
         keep: "least",
     });
@@ -45,11 +45,11 @@ export function min<T>(
 export function max<T>(
     values: Iterable<T>,
     count: number | bigint,
-    comparator: Comparator<T> = autoComparator
+    order: Order<T> = autoComparator
 ): Iterable<T> {
     if (count === 0 || count === 0n) return [];
 
-    const result = new SortedSequence<T>(comparator, {
+    const result = new SortedSequence<T>(order, {
         maxSize: Number(count),
         keep: "greatest",
     });
