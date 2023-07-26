@@ -1,5 +1,5 @@
 /**
- * A comparator which returns a number representing the comparison of its two arguemtents.
+ * A comparator which returns a number representing the comparison of its two arguments.
  * @returns  - positive: first > second
  *  - negative: first < second
  *  - 0: first = second
@@ -60,7 +60,7 @@ export function asComparator<T>(order: Order<T>): Comparator<T> {
 }
 
 /**
- * Automatically compares values in sensical ways.
+ * Automatically compares values in sensible ways.
  *
  * Compares by type first. The types in ascending order are:
  *  - undefined*
@@ -94,7 +94,7 @@ export const autoComparator: Comparator<unknown> = (
     // boolean,Boolean    -- 2
 
     // number,Number    -- 3
-    // bigint,Bigine     -- 3
+    // bigint,Bigint     -- 3
 
     // string,String     -- 4
     // symbol,Symbol     -- 5
@@ -104,7 +104,7 @@ export const autoComparator: Comparator<unknown> = (
     // function   -- 9
 
     // * -- Array.sort ignores undefined items and just puts them
-    // all at the end regardless of the comparator. This rating is not pointless though as it will still be used when sorting values by a field isntead of the value directly
+    // all at the end regardless of the comparator. This rating is not pointless though as it will still be used when sorting values by a field instead of the value directly
 
     // type
     const typeRatingA = rateType(a);
@@ -222,3 +222,11 @@ export const autoComparator: Comparator<unknown> = (
         }
     }
 };
+
+/**
+ * Reverses the given order so that, in comparator form, a positive number is returned when a negative number would have been and vice versa.
+ */
+export function reverseOrder<T>(order: Order<T>): Order<T> {
+    const comparator = asComparator(order);
+    return (a: T, b: T) => comparator(b, a);
+}

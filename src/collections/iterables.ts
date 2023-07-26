@@ -1,33 +1,57 @@
-import Itmod from "../Itmod";
-import SortedMap from "./SortedMap";
-import { asiterator } from "./as";
-import { isIterable } from "./is";
+import { asIterator } from "./as";
 
-/** A clone of python's range function */
+/**
+ * @returns An {@link Iterable} over a range of integers from start to end, incremented by step.
+ * @param start The first number in the sequence.
+ * @param end Where the range ends (exclusive).
+ * @param step How much larger each number in the sequence is from the previous number.
+ */
 export function range(
     start: bigint,
     end: bigint,
     step: bigint
 ): Iterable<bigint>;
-/** A clone of python's range function */
+/**
+ * @returns An {@link Iterable} over a range of integers from start to end, incremented by 1 or -1 if end is less than start.
+ * @param start The first number in the sequence.
+ * @param end Where the range ends (exclusive).
+ */
 export function range(start: bigint, end: bigint): Iterable<bigint>;
-/** A clone of python's range function */
+
+/**
+ * @returns An {@link Iterable} over a range of integers from 0 to end, incremented by 1.
+ * @param end Where the range ends (exclusive).
+ */
 export function range(end: bigint): Iterable<bigint>;
-/** A clone of python's range function */
+
+/**
+ * @returns An {@link Iterable} over a range of numbers from start to end, incremented by step.
+ * @param start The first number in the sequence.
+ * @param end Where the range ends (exclusive).
+ * @param step How much larger each number in the sequence is from the previous number.
+ */
 export function range(
     start: number | bigint,
     end: number | bigint,
     step: number | bigint
 ): Iterable<number>;
-/** A clone of python's range function */
+
+/**
+ * @returns An {@link Iterable} over a range of numbers from start to end, incremented by 1 or -1 if end isless than start.
+ * @param start The first number in the sequence.
+ * @param end Where the range ends (exclusive).
+ */
 export function range(
     start: number | bigint,
     end: number | bigint
 ): Iterable<number>;
-/** A clone of python's range function */
+
+/**
+ * @returns An {@link Iterable} over a range of numbers from 0 to end, incremented by 1.
+ * @param end Where the range ends (exclusive).
+ */
 export function range(end: number | bigint): Iterable<number>;
 
-/** A clone of python's range function */
 export function range(
     _startOrEnd: number | bigint,
     _end?: number | bigint,
@@ -78,6 +102,9 @@ export function range(
     };
 }
 
+/**
+ * @returns An iterator with no items.
+ */
 export function emptyIterator<T>(): Iterator<T> {
     return {
         next() {
@@ -89,16 +116,21 @@ export function emptyIterator<T>(): Iterator<T> {
     };
 }
 
-export function cachingIterable<T>(iterable: Iterable<T> | Iterator<T>) {
+/**
+ * Caches the given {@link Iterable} so that multiple iterations of the returned {@link Iterable} only iterate the original once.
+ */
+export function cachingIterable<T>(
+    iterable: Iterable<T> | Iterator<T>
+): Iterable<T> {
     const cache: T[] = [];
-    const iterator = asiterator(iterable);
+    const iterator = asIterator(iterable);
 
     return {
         *[Symbol.iterator]() {
             let i = 0;
             while (true) {
                 if (i < cache.length) {
-                    yield cache[i];
+                    yield cache[i] as T;
                 } else {
                     const next = iterator.next();
                     if (next.done) return;
@@ -110,5 +142,3 @@ export function cachingIterable<T>(iterable: Iterable<T> | Iterator<T>) {
         },
     };
 }
-
-

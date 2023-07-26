@@ -1,3 +1,4 @@
+import CircularBuffer from "./collections/CircularBuffer";
 import { asArray, asIterable } from "./collections/as";
 import {
     isArray,
@@ -15,10 +16,17 @@ import { identity, resultOf, returns } from "./functional";
 import {
     requireIntegerOrInfinity,
     requireNonNegative,
+    requireNonZero,
     requireSafeInteger,
 } from "./require";
 import { BreakSignal, breakSignal } from "./signals";
-import { Comparator, Order, asComparator, autoComparator } from "./sorting";
+import {
+    Comparator,
+    Order,
+    asComparator,
+    autoComparator,
+    reverseOrder,
+} from "./sorting";
 import {
     max,
     min,
@@ -58,7 +66,7 @@ export default class Itmod<T> implements Iterable<T> {
     /**
      * @returns The {@link Iterable} source.
      */
-    protected readonly getSource: () => Iterable<T>;
+    public readonly getSource: () => Iterable<T>;
     protected readonly properties: ItmodProperties<T>;
 
     /**
@@ -87,18 +95,21 @@ export default class Itmod<T> implements Iterable<T> {
             | Iterable<T>
             | Iterator<T>
             | (() => Iterable<T>)
-            | (() => Iterator<T>)
+            | (() => Iterator<T>),
+        properties: ItmodProperties<T> = {}
     ): Itmod<T> {
         if (source instanceof Function) {
-            return new Itmod({ expensive: true }, () => {
-                return asIterable(source());
-            });
-        } else if (source instanceof Itmod) {
-            return source;
+            return new Itmod(
+                { ...properties, expensive: properties.expensive ?? true },
+                () => {
+                    return asIterable(source());
+                }
+            );
         } else {
-            return new Itmod({}, returns(asIterable(source)));
+            return new Itmod(properties, returns(asIterable(source)));
         }
     }
+
     /**
      * @returns An {@link Itmod} over the given items.
      */
@@ -163,7 +174,7 @@ export default class Itmod<T> implements Iterable<T> {
         requireNonNegative(requireIntegerOrInfinity(count));
 
         return new Itmod({ infinite: count === Infinity }, function* () {
-            let i = typeof count === "number" ? 0 : 0n;
+            let i = zeroLike(count);
             if (generatorOrItem instanceof Function) {
                 for (; i < count; i++) {
                     yield generatorOrItem(i);
@@ -178,6 +189,9 @@ export default class Itmod<T> implements Iterable<T> {
 
     /**
      * @returns An {@link Itmod} over a range of integers from start to end, incremented by step.
+     * @param start The first number in the sequence.
+     * @param end Where the range ends (exclusive).
+     * @param step How much larger each number in the sequence is from the previous number.
      */
     public static range(
         start: bigint,
@@ -186,15 +200,21 @@ export default class Itmod<T> implements Iterable<T> {
     ): Itmod<bigint>;
     /**
      * @returns An {@link Itmod} over a range of integers from start to end, incremented by 1 or -1 if end is less than start.
+     * @param start The first number in the sequence.
+     * @param end Where the range ends (exclusive).
      */
     public static range(start: bigint, end: bigint): Itmod<bigint>;
     /**
      * @returns An {@link Itmod} over a range of integers from 0 to end, incremented by 1.
+     * @param end Where the range ends (exclusive).
      */
     public static range(end: bigint): Itmod<bigint>;
 
     /**
-     * @returns An {@link Itmod} over a range of integers from start to end, incremented by step.
+     * @returns An {@link Itmod} over a range of numbers from start to end, incremented by step.
+     * @param start The first number in the sequence.
+     * @param end Where the range ends (exclusive).
+     * @param step How much larger each number in the sequence is from the previous number.
      */
     public static range(
         start: number | bigint,
@@ -202,14 +222,17 @@ export default class Itmod<T> implements Iterable<T> {
         step: number | bigint
     ): Itmod<number>;
     /**
-     * @returns An {@link Itmod} over a range of integers from start to end, incremented by 1 or -1 if end is less than start.
+     * @returns An {@link Itmod} over a range of numbers from start to end, incremented by 1 or -1 if end is less than start.
+     * @param start The first number in the sequence.
+     * @param end Where the range ends (exclusive).
      */
     public static range(
         start: number | bigint,
         end: number | bigint
     ): Itmod<number>;
     /**
-     * @returns An {@link Itmod} over a range of integers from 0 to end, incremented by 1.
+     * @returns An {@link Itmod} over a range of numbers from 0 to end, incremented by 1.
+     * @param end Where the range ends (exclusive).
      */
     public static range(end: number | bigint): Itmod<number>;
 
@@ -481,7 +504,7 @@ export default class Itmod<T> implements Iterable<T> {
                     const source = self.getSource();
                     const array = asArray(source);
                     for (let i = array.length - 1; i >= 0; i--) {
-                        yield array[i];
+                        yield array[i] as T;
                     }
                 }
             );
@@ -508,7 +531,7 @@ export default class Itmod<T> implements Iterable<T> {
                 return new Itmod({ infinite: true }, function* () {
                     const source = self.getSource();
 
-                    const cached = isArray(source)
+                    const cached = isSolid(source)
                         ? source
                         : cachedIterable(source);
 
@@ -523,11 +546,7 @@ export default class Itmod<T> implements Iterable<T> {
                 const cached = isArray(source)
                     ? source
                     : cachedIterable(source);
-                for (
-                    let i = typeof times === "number" ? 0 : 0n;
-                    i < times;
-                    i++
-                ) {
+                for (let i = zeroLike(times); i < times; i++) {
                     yield* cached;
                 }
             });
@@ -539,33 +558,10 @@ export default class Itmod<T> implements Iterable<T> {
      */
     public get take() {
         const self = this;
+        const externalTake = take;
         return function take(count: number | bigint): Itmod<T> {
-            requireNonNegative(requireIntegerOrInfinity(count));
-            if (count === Infinity) return self;
-
-            return new Itmod(
-                {
-                    fresh: self.properties.fresh,
-                    expensive: self.properties.expensive,
-                },
-                () => {
-                    const source = self.getSource();
-                    if (self.properties.fresh && isArrayAsWritable(source)) {
-                        source.length = Math.min(Number(count), source.length);
-                        return source;
-                    }
-
-                    return (function* () {
-                        let i = 0;
-                        if (i >= count) return;
-                        for (const value of source) {
-                            if (i >= count) return;
-                            yield value;
-                            i++;
-                        }
-                    })()[Symbol.iterator]();
-                }
-            );
+            requireIntegerOrInfinity(requireNonZero(count));
+            return new Itmod({}, () => externalTake(count, self.getSource()));
         };
     }
 
@@ -574,35 +570,10 @@ export default class Itmod<T> implements Iterable<T> {
      */
     public get skip() {
         const self = this;
+        const externalSkip = skip;
         return function skip(count: number | bigint): Itmod<T> {
-            requireNonNegative(requireIntegerOrInfinity(count));
-            if (count === 0) return self;
-            if (count === Infinity) return Itmod.of();
-
-            return new Itmod({}, function* () {
-                const source = self.getSource();
-                if (isArray(source)) {
-                    for (let i = Number(count); i < source.length; i++) {
-                        yield source[i];
-                    }
-                } else {
-                    const iterator = source[Symbol.iterator]();
-                    let next = iterator.next();
-                    for (
-                        let i = typeof count === "number" ? 0 : 0n;
-                        i < count;
-                        i++
-                    ) {
-                        if (next.done) return;
-                        next = iterator.next();
-                    }
-
-                    while (!next.done) {
-                        yield next.value;
-                        next = iterator.next();
-                    }
-                }
-            });
+            requireIntegerOrInfinity(requireNonZero(count));
+            return new Itmod({}, () => externalSkip(count, self.getSource()));
         };
     }
 
@@ -610,8 +581,13 @@ export default class Itmod<T> implements Iterable<T> {
      * Takes the final given number of items, skipping the preceding items.
      */
     public get takeFinal() {
-        return function takeFinal(count: number | bigint): Itmod<T> {
-            throw new NotImplementedError();
+        const self = this;
+        const externalTakeFinal = takeFinal;
+        return function takeFinal(count: number | bigint) {
+            requireIntegerOrInfinity(requireNonNegative(count));
+            return new Itmod({}, () =>
+                externalTakeFinal(count, self.getSource())
+            );
         };
     }
 
@@ -619,18 +595,32 @@ export default class Itmod<T> implements Iterable<T> {
      * Skips the final given number of items, skipping the preceding items.
      */
     public get skipFinal() {
-        throw new NotImplementedError();
+        const self = this;
+        const externalSkipFinal = skipFinal;
+        return function skipFinal(count: number | bigint) {
+            requireIntegerOrInfinity(requireNonNegative(count));
+            return new Itmod({}, () =>
+                externalSkipFinal(count, self.getSource())
+            );
+        };
     }
 
+    /**
+     * @deprecated not implemented yet
+     */
     public get takeSparse() {
         throw new NotImplementedError();
     }
+
+    /**
+     * @deprecated not implemented yet
+     */
     public get skipSparse() {
         throw new NotImplementedError();
     }
 
     /**
-     * Attempts to determine how many items are in the {@Iterable} without iterating it.
+     * Attempts to determine how many items are in the {@link Iterable} without iterating it.
      * @returns The number of items or undefined if it couldn't be determined.
      */
     public get nonIteratedCountOrUndefined() {
@@ -787,7 +777,7 @@ export default class Itmod<T> implements Iterable<T> {
             return new SortedItmod(
                 self.properties,
                 self.getSource,
-                orders.length === 0 ? [autoComparator] : orders
+                orders.length === 0 ? [reverseOrder(autoComparator)] : orders
             );
         };
     }
@@ -836,7 +826,7 @@ export class MappedItmod<T, R> extends Itmod<R> {
                 const source = self.originalGetSource();
                 if (isArray(source)) {
                     for (let i = Number(count); i < source.length; i++) {
-                        yield self.mapping(source[i], i);
+                        yield self.mapping(source[i] as T, i);
                     }
                 } else {
                     const iterator = source[Symbol.iterator]();
@@ -914,56 +904,64 @@ export class SortedItmod<T> extends Itmod<T> {
         this.comparator = comparator;
     }
 
-    public get skip() {
-        const skip = (count: number | bigint) => {
-            requireNonNegative(requireIntegerOrInfinity(count));
-            return new SortedItmod<T>(
-                {},
-                () => {
-                    const source = this.getSource();
-                    const sourceCount = nonIteratedCountOrUndefined(source);
-                    if (sourceCount === undefined) {
-                        return super.skip(count);
-                    }
-                    if (count >= sourceCount) return [];
-                    return this.takeFinal(
-                        typeof count === "bigint"
-                            ? BigInt(sourceCount) - count
-                            : sourceCount - count
-                    ).getSource();
-                },
-                this.orders,
-                { preSorted: true }
-            );
-        };
-        return skip;
-    }
+    // public get take(count: number | bigint) {
+    //     const self = this;
+    //     const externalTake = take;
+    //     return function take() {
+    //         return new Itmod({}, )
+    //     }
+    // }
 
-    public get take() {
-        const self = this;
-        return function take(count: number | bigint): SortedItmod<T> {
-            requireNonNegative(requireIntegerOrInfinity(count));
-            return new SortedItmod<T>(
-                { fresh: true, expensive: true },
-                () => min(self, count, self.comparator),
-                self.orders,
-                { preSorted: true }
-            );
-        };
-    }
+    // public get skip() {
+    //     const skip = (count: number | bigint): SortedItmod<T> => {
+    //         // TODO do this better
+    //         requireNonNegative(requireIntegerOrInfinity(count));
+    //         const sourceCount = this.nonIteratedCountOrUndefined();
+    //         if (sourceCount !== undefined) {
+    //             if (count >= sourceCount)
+    //                 return new SortedItmod(
+    //                     { fresh: true },
+    //                     () => [],
+    //                     this.orders,
+    //                     { preSorted: true }
+    //                 );
+    //             return this.takeFinal(
+    //                 typeof count === "bigint"
+    //                     ? BigInt(sourceCount) - count
+    //                     : sourceCount - count
+    //             );
+    //         } else {
+    //             return new SortedItmod({}, () => super.skip(count), );
+    //         }
+    //     };
+    //     return skip;
+    // }
 
-    public get takeFinal() {
-        const self = this;
-        return function takeFinal(count: number | bigint): SortedItmod<T> {
-            requireNonNegative(requireIntegerOrInfinity(count));
-            return new SortedItmod<T>(
-                { fresh: true, expensive: true },
-                () => max(self, count, self.comparator),
-                self.orders,
-                { preSorted: true }
-            );
-        };
-    }
+    // public get take() {
+    //     const self = this;
+    //     return function take(count: number | bigint): SortedItmod<T> {
+    //         requireNonNegative(requireIntegerOrInfinity(count));
+    //         return new SortedItmod<T>(
+    //             { fresh: true, expensive: true },
+    //             () => min(self, count, self.comparator),
+    //             self.orders,
+    //             { preSorted: true }
+    //         );
+    //     };
+    // }
+
+    // public get takeFinal() {
+    //     const self = this;
+    //     return function takeFinal(count: number | bigint): SortedItmod<T> {
+    //         requireNonNegative(requireIntegerOrInfinity(count));
+    //         return new SortedItmod<T>(
+    //             { fresh: true, expensive: true },
+    //             () => max(self, count, self.comparator),
+    //             self.orders,
+    //             { preSorted: true }
+    //         );
+    //     };
+    // }
 
     /**
      * Adds more fallback sorts to the {@link SortedItmod}.
@@ -988,8 +986,127 @@ export class SortedItmod<T> extends Itmod<T> {
             return new SortedItmod(
                 self.originalProperties,
                 self.originalGetSource,
-                [...self.orders, ...orders]
+                [...self.orders, ...orders.map(reverseOrder)]
             );
         };
     }
+}
+
+function take<T>(count: number | bigint, source: Iterable<T>): Iterable<T> {
+    requireIntegerOrInfinity(requireNonNegative(count));
+    if (count === Infinity) return source;
+
+    const size = nonIteratedCountOrUndefined(source);
+    if (size !== undefined) {
+        if (count >= size) return source;
+    }
+
+    return {
+        *[Symbol.iterator]() {
+            const iterator = source[Symbol.iterator]();
+            for (let i = zeroLike(count); i < count; i++) {
+                const next = iterator.next();
+                if (next.done) break;
+
+                yield next.value;
+            }
+        },
+    };
+}
+
+function skip<T>(count: number | bigint, source: Iterable<T>): Iterable<T> {
+    requireIntegerOrInfinity(requireNonNegative(count));
+    if (count === 0 || count === 0n) return source;
+    if (count === Infinity) return [];
+
+    return {
+        *[Symbol.iterator]() {
+            if (isArray(source)) {
+                const numberCount = Number(count);
+                if (numberCount === Infinity) return [];
+                for (let i = Number(count); i < source.length; i++) {
+                    yield source[i] as T;
+                }
+            } else {
+                const iterator = source[Symbol.iterator]();
+                let next = iterator.next();
+
+                for (let i = zeroLike(count); i < count; i++) {
+                    if (next.done) return;
+                    next = iterator.next();
+                }
+
+                while (!next.done) {
+                    yield next.value;
+                    next = iterator.next();
+                }
+            }
+        },
+    };
+}
+
+function takeFinal<T>(
+    count: number | bigint,
+    source: Iterable<T>
+): Iterable<T> {
+    requireIntegerOrInfinity(requireNonNegative(count));
+    if (count === Infinity) return source;
+    if (count === 0 || count === 0n) return [];
+
+    const size = nonIteratedCountOrUndefined(source);
+    if (size !== undefined) {
+        if (count >= size) return source;
+        return skip(size - Number(count), source);
+    }
+
+    const buffer = new CircularBuffer<T>(Number(count));
+    for (const value of source) {
+        buffer.push(value);
+    }
+
+    return buffer;
+}
+
+function skipFinal<T>(
+    count: number | bigint,
+    source: Iterable<T>
+): Iterable<T> {
+    requireIntegerOrInfinity(requireNonNegative(count));
+    if (count === Infinity) return [];
+    if (count === 0 || count === 0n) return source;
+
+    const size = nonIteratedCountOrUndefined(source);
+    if (size !== undefined) {
+        if (count >= size) return [];
+        return take(size - Number(count), source);
+    }
+
+    return {
+        *[Symbol.iterator]() {
+            const buffer = new CircularBuffer<T>(Number(count));
+            let i = zeroLike(count);
+            for (const item of source) {
+                buffer.unshift(item);
+                if (i >= count) {
+                    yield buffer.at(0)!;
+                } else {
+                    i++;
+                }
+            }
+        },
+    };
+}
+
+function zeroLike<N extends number | bigint>(n: N): N extends number ? 0 : 0n {
+    if (typeof n === "number") {
+        return 0 as any;
+    } else {
+        return 0n as any;
+    }
+}
+
+function isSolid<T>(
+    iterable: Iterable<T>
+): iterable is ReadonlyArray<T> | ReadonlySet<T> {
+    return isArray(iterable) || isSet(iterable);
 }

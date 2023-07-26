@@ -5,15 +5,15 @@ import SortedMap from "./SortedMap";
 type Entry<T> = { value: T; index: bigint };
 
 /**
- * A sequence of items, optionaly with a max size, that maintains sorted order with insertion order as a fallback for duplicate values.
+ * A sequence of items, optionally with a max size, that maintains sorted order with insertion order as a fallback for duplicate values.
  */
 export default class SortedSequence<T> implements Collection<T> {
     private readonly data: SortedMap<Entry<T>, undefined>;
-    public readonly sizeLimit?: {
+    public readonly sizeLimit?: Readonly<{
         maxSize: number;
         keep: "greatest" | "least";
-    };
-    private index: bigint = -9_223_372_036_854_775_808n; // smallest signed 64 bit integer I think
+    }>;
+    private index: bigint = -9_223_372_036_854_775_808n; // smallest signed 64 bit integer
 
     /**
      * @param order How to compare the values. Defaults to {@link autoComparator}.
@@ -55,6 +55,20 @@ export default class SortedSequence<T> implements Collection<T> {
                 this.data.deleteGreatest();
             }
         }
+    }
+
+    /**
+     * Deletes the greatest value from the list.
+     */
+    public deleteGreatest() {
+        return this.data.deleteGreatest() !== undefined;
+    }
+
+    /**
+     * Deletes the least value from the list.
+     */
+    public deleteLeast() {
+        return this.data.deleteLeast() !== undefined;
     }
 
     /** Add many values to the sequence. */

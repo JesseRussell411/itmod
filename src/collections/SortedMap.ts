@@ -8,8 +8,15 @@ import { MapEntry } from "./MapEntry";
 
 // TODO? red-black tree, this is an avl tree because avl trees are easy
 
-// design note: If they ever add a sorted map or set to the ecmascript standard, I will be very happy to make this a deprecated wrapper around that, or even a child class of it.
+// design note: If they ever add a sorted map or set to the ecmascript standard,
+// I will be very happy to make this a deprecated wrapper around that,
+// or even a child class of it.
 
+// I'm sure whatever the V8 team can put together in C would be much more efficient than my undergrad level, intro to data structures avl tree.
+
+/**
+ * A map that stores key-value pairs in the order specified.
+ */
 export default class SortedMap<K, V> implements Collection<MapEntry<K, V>> {
     private root: Node<K, V> | undefined;
     private comparator: Comparator<K>;
@@ -266,7 +273,7 @@ export default class SortedMap<K, V> implements Collection<MapEntry<K, V>> {
     /**
      * @param lowerBound The lowest possible key to return (inclusive lower bound).
      * @param upperBound What all keys returned must be less than (exclusive upper bound).
-     * @returns A {@link Generator} over the range of entries specified.
+     * @returns A {@link Generator} over the specified range of entries.
      */
     public *range(lowerBound: K, upperBound: K): Generator<MapEntry<K, V>> {
         if (undefined === this.root) return;
@@ -279,10 +286,20 @@ export default class SortedMap<K, V> implements Collection<MapEntry<K, V>> {
         }
     }
 
+    /**
+     * Locates the entry with the given key. If it's not found, a new entry is inserted.
+     *
+     */
     private locateOrInsert(
         key: K,
         newValue: V | (() => V)
-    ): Readonly<{ inserted: boolean; location: Node<K, V> }> {
+    ): Readonly<{
+        /** Whether the entry had to be inserts because it wasn't located. */
+        inserted: boolean;
+
+        /** Where the entry is located. */
+        location: Node<K, V>;
+    }> {
         if (undefined === this.root) {
             this.root = new Node(key, resultOf(newValue));
             this._size++;
@@ -331,6 +348,9 @@ function calcNodeCount(
 }
 
 class Node<K, V = undefined> implements Iterable<Node<K, V>> {
+    // Any field that would be undefined is left un-set to save memory.
+    // That is what the ts-ignores are for. So that typescript doesn't throw errors about these fields not being guarantied to be set.
+
     //@ts-ignore
     key: K;
     //@ts-ignore
@@ -420,11 +440,10 @@ class Node<K, V = undefined> implements Iterable<Node<K, V>> {
     }
 
     /**
-     *
      * @param comparator
      * @param lowerBound inclusive
      * @param upperBound exclusive
-     * @returns
+     * @returns A generator over the specified range of values.
      */
     public *range(
         comparator: (a: K, b: K) => number,
@@ -551,8 +570,8 @@ class Node<K, V = undefined> implements Iterable<Node<K, V>> {
         comparator: (a: K, b: K) => number,
         key: K,
         newValue: V | (() => V),
-        onLocate: (location: Node<K, V>) => void = () => {},
-        onInsert: (location: Node<K, V>) => void = () => {}
+        onLocate: (location: Node<K, V>) => void = doNothing,
+        onInsert: (location: Node<K, V>) => void = doNothing
     ): Node<K, V> | undefined {
         const cmp = comparator(key, this.key);
         if (cmp < 0) {

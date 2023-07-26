@@ -22,15 +22,15 @@ export function returns<T>(item: T): () => T {
     return () => item;
 }
 
-/** @throws The error given. */
+/** @throws The given {@link Error}. */
 export function throwError<E>(error: E): void {
     throw error;
 }
 
-/** @throws The error of type E. */
+/** @throws The {@link Error} of type E. */
 type ThrowError<E> = () => void;
 
-/** @returns A function that throws the given error. */
+/** @returns A function that throws the given {@link Error}. */
 export function throws<E>(error: E): ThrowError<E> {
     return () => {
         throw error;
