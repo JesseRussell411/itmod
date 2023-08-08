@@ -76,7 +76,7 @@ export function asComparator<T>(order: Order<T>): Comparator<T> {
  *
  * Compares by value second:
  *  - boolean/Boolean: false comes before true
- *  - number/{@link Number}, bigint/{@link BigInt}: lower values come before higher values; additionaly, number/{@link Number} and bigint/{@link BigInt} are mixed so that 2 comes before 4n and 4n comes before 5.5, etc.
+ *  - number/{@link Number}, bigint/{@link BigInt}: lower values come before higher values; additionally, number/{@link Number} and bigint/{@link BigInt} are mixed so that 2 comes before 4n and 4n comes before 5.5, etc.
  *  - string/{@link String}: the result of {@link String.localeCompare}
  *  - {@link Date}: earlier {@link Date}s come before later {@link Date}s
  *  - the rest: not compared, 0 is returned
@@ -113,8 +113,10 @@ export const autoComparator: Comparator<unknown> = (
     // sort by type first
     if (typeRatingA !== typeRatingB) return typeRatingA - typeRatingB;
 
+    const typeRating = typeRatingA;
+
     // value
-    switch (typeRatingA) {
+    switch (typeRating) {
         // undefined
         case 0:
             return 0;
@@ -180,7 +182,6 @@ export const autoComparator: Comparator<unknown> = (
 
     function rateType(item: any) {
         // TODO? move outside of parent function if better performance
-        // TODO? replace switch with Map or object if better performance
 
         switch (typeof item) {
             case "undefined":

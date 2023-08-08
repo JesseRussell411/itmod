@@ -8,7 +8,7 @@ export function resultOf<T>(itemOrGetter: T | (() => T)): T {
 }
 
 /** Does nothing. */
-export function doNothing(): void {
+export function doNothing(... _args:any[]): void {
     // doing nothing...
 }
 

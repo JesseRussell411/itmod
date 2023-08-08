@@ -34,6 +34,19 @@ import {
 } from "./transformations/iterable";
 import { General } from "./types/literals";
 
+// TODO unit tests
+// TODO unit tests
+// TODO unit tests
+// TODO unit tests
+// TODO unit tests
+// TODO unit tests
+// TODO unit tests
+// TODO unit tests
+// TODO unit tests
+// TODO unit tests
+// TODO unit tests
+
+// TODO unit tests
 export type Comparison =
     | "equals"
     | "lessThan"
@@ -904,65 +917,6 @@ export class SortedItmod<T> extends Itmod<T> {
         this.comparator = comparator;
     }
 
-    // public get take(count: number | bigint) {
-    //     const self = this;
-    //     const externalTake = take;
-    //     return function take() {
-    //         return new Itmod({}, )
-    //     }
-    // }
-
-    // public get skip() {
-    //     const skip = (count: number | bigint): SortedItmod<T> => {
-    //         // TODO do this better
-    //         requireNonNegative(requireIntegerOrInfinity(count));
-    //         const sourceCount = this.nonIteratedCountOrUndefined();
-    //         if (sourceCount !== undefined) {
-    //             if (count >= sourceCount)
-    //                 return new SortedItmod(
-    //                     { fresh: true },
-    //                     () => [],
-    //                     this.orders,
-    //                     { preSorted: true }
-    //                 );
-    //             return this.takeFinal(
-    //                 typeof count === "bigint"
-    //                     ? BigInt(sourceCount) - count
-    //                     : sourceCount - count
-    //             );
-    //         } else {
-    //             return new SortedItmod({}, () => super.skip(count), );
-    //         }
-    //     };
-    //     return skip;
-    // }
-
-    // public get take() {
-    //     const self = this;
-    //     return function take(count: number | bigint): SortedItmod<T> {
-    //         requireNonNegative(requireIntegerOrInfinity(count));
-    //         return new SortedItmod<T>(
-    //             { fresh: true, expensive: true },
-    //             () => min(self, count, self.comparator),
-    //             self.orders,
-    //             { preSorted: true }
-    //         );
-    //     };
-    // }
-
-    // public get takeFinal() {
-    //     const self = this;
-    //     return function takeFinal(count: number | bigint): SortedItmod<T> {
-    //         requireNonNegative(requireIntegerOrInfinity(count));
-    //         return new SortedItmod<T>(
-    //             { fresh: true, expensive: true },
-    //             () => max(self, count, self.comparator),
-    //             self.orders,
-    //             { preSorted: true }
-    //         );
-    //     };
-    // }
-
     /**
      * Adds more fallback sorts to the {@link SortedItmod}.
      */
@@ -988,6 +942,56 @@ export class SortedItmod<T> extends Itmod<T> {
                 self.originalGetSource,
                 [...self.orders, ...orders.map(reverseOrder)]
             );
+        };
+    }
+
+    public get min() {
+        const self = this;
+        const externalMin = min;
+        return function min(count: number | bigint) {
+            return new SortedItmod(
+                { ...self.originalProperties, fresh: true, expensive: true },
+                () =>
+                    externalMin(
+                        self.originalGetSource(),
+                        count,
+                        self.comparator
+                    ),
+                self.orders,
+                { preSorted: true }
+            );
+        };
+    }
+
+    public get max() {
+        const self = this;
+        const externalMax = max;
+        return function max(count: number | bigint) {
+            return new SortedItmod(
+                { ...self.originalProperties, fresh: true, expensive: true },
+                () =>
+                    externalMax(
+                        self.originalGetSource(),
+                        count,
+                        self.comparator
+                    ),
+                self.orders,
+                { preSorted: true }
+            );
+        };
+    }
+
+    public get take() {
+        const self = this;
+        return function take(count: number | bigint) {
+            return self.min(count);
+        };
+    }
+
+    public get takeFinal() {
+        const self = this;
+        return function takeFinal(count: number | bigint) {
+            return self.max(count);
         };
     }
 }

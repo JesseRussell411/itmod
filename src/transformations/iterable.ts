@@ -1,10 +1,11 @@
 import Itmod from "../Itmod";
-import SortedSequence from "../collections/SortedList";
+import CircularBuffer from "../collections/CircularBuffer";
 import SortedMap from "../collections/SortedMap";
-import { Comparator, Order, autoComparator } from "../sorting";
+import SortedSequence from "../collections/SortedSequence";
+import { Order, autoComparator } from "../sorting";
 
 /**
- * Attemps to determine the number of values in the {@link Iterable} without iterating it.
+ * Attempts to determine the number of values in the {@link Iterable} without iterating it.
  * @param iterable
  * @returns The size of the {@link Iterable} or undefined if the size couldn't be determined without iterating it.
  */
@@ -15,7 +16,9 @@ export function nonIteratedCountOrUndefined(
     if (
         iterable instanceof Set ||
         iterable instanceof Map ||
-        iterable instanceof SortedMap
+        iterable instanceof SortedMap ||
+        iterable instanceof SortedSequence ||
+        iterable instanceof CircularBuffer
     ) {
         return iterable.size;
     }
