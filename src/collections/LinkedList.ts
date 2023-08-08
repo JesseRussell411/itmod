@@ -27,7 +27,7 @@ export default class LinkedList<T> extends Collection<T> {
     private _tail?: Node<T>;
     private _size: number = 0;
 
-    /** The first node. */
+    /** The node at index 0. */
     public get head(): LinkedListNode<T> | undefined {
         return this._head;
     }
@@ -194,7 +194,7 @@ export default class LinkedList<T> extends Collection<T> {
     }
 
     /**
-     * Removes the {@link tail}'s value and returns it.
+     * Removes the {@link tail} node and returns its value.
      *
      * @returns The former {@link tail}'s value or undefined if the {@link LinkedList} is empty.
      */
@@ -220,7 +220,7 @@ export default class LinkedList<T> extends Collection<T> {
     }
 
     /**
-     * Removes the {@link head}'s value and returns it.
+     * Removes the {@link head} node and returns its value.
      *
      * @returns The former {@link head}'s value or undefined if the {@link LinkedList} is empty.
      */
