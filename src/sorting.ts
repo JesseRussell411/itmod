@@ -62,32 +62,18 @@ export function asComparator<T>(order: Order<T>): Comparator<T> {
 /**
  * Automatically compares values in sensible ways.
  *
- * Compares by type first. The types in ascending order are:
- *  - undefined*
- *  - null
- *  - boolean/{@link Boolean}
- *  - number/{@link Number}, bigint/{@link BigInt}
- *  - string/{@link String}
- *  - symbol
- *  - {@link Date}
- *  - {@link Array}
- *  - object
- *  - function
- *
- * Compares by value second:
+ * Comparisons:
  *  - boolean/Boolean: false comes before true
- *  - number/{@link Number}, bigint/{@link BigInt}: lower values come before higher values; additionally, number/{@link Number} and bigint/{@link BigInt} are mixed so that 2 comes before 4n and 4n comes before 5.5, etc.
- *  - string/{@link String}: the result of {@link String.localeCompare}
- *  - {@link Date}: earlier {@link Date}s come before later {@link Date}s
- *  - the rest: not compared, 0 is returned
- *
- *  \* {@link Array.sort} always moves undefined values to the end of the {@link Array} regardless of the {@link Comparator}.
+ *  - number/{@link Number}, bigint/{@link BigInt}: Lower values come before higher values; additionally, number/{@link Number} and bigint/{@link BigInt} are mixed so that 2 comes before 4n and 4n comes before 5.5, etc.
+ *  - string/{@link String}: The result of {@link String.localeCompare}.
+ *  - {@link Date}: Earlier {@link Date}s come before later {@link Date}s.
+ *  - everything else: Not compared. 0 is returned.
  */
 export const autoComparator: Comparator<unknown> = (
     a: unknown,
     b: unknown
 ): number => {
-    // TYPE RATINGS:
+    // TYPE IDs:
 
     // undefined* -- 0
     // null       -- 1
@@ -103,15 +89,12 @@ export const autoComparator: Comparator<unknown> = (
     // object     -- 8
     // function   -- 9
 
-    // * -- Array.sort ignores undefined items and just puts them
-    // all at the end regardless of the comparator. This rating is not pointless though as it will still be used when sorting values by a field instead of the value directly
-
     // type
-    const typeRatingA = rateType(a);
-    const typeRatingB = rateType(b);
+    const typeRatingA = idType(a);
+    const typeRatingB = idType(b);
 
     // sort by type first
-    if (typeRatingA !== typeRatingB) return typeRatingA - typeRatingB;
+    if (typeRatingA !== typeRatingB) return 0;
 
     const typeRating = typeRatingA;
 
@@ -180,7 +163,7 @@ export const autoComparator: Comparator<unknown> = (
             return 0;
     }
 
-    function rateType(item: any) {
+    function idType(item: any) {
         // TODO? move outside of parent function if better performance
 
         switch (typeof item) {
