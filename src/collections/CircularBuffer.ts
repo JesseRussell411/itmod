@@ -3,7 +3,11 @@ import Collection from "./Collection";
 
 // TODO insert, delete, resize
 
-/** Buffer of limited size that can shift, unshift, push, and pop elements equally efficiently. Elements can be added until the maximum size is reached; whereupon, elements on the opposite side of the buffer are removed to make room.*/
+/**
+ * Buffer of limited size that can shift, unshift, push, and pop elements equally efficiently. Elements can be added until the maximum size is reached; whereupon, elements on the opposite side of the buffer are removed to make room.
+ *
+ * Note that an {@link Array} is allocated at creation that is equal in size to the maxSize.
+ */
 export default class CircularBuffer<T> extends Collection<T> {
     private readonly data: (T | undefined)[];
     private offset: number;

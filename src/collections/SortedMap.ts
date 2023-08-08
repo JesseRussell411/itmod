@@ -1,4 +1,4 @@
-// avl tree implementation with *no dependencies*
+// // avl tree implementation with *no dependencies*
 
 import { doNothing, resultOf } from "../functional";
 import { requireSafeInteger } from "../require";
@@ -14,19 +14,20 @@ import { MapEntry } from "./MapEntry";
 
 // I'm sure whatever the V8 team can put together in C would be much more efficient than my undergrad level, intro to data structures avl tree.
 
+// TODO just redo this whole thing, make it more like LinkedList in design
+
 /**
  * A map that stores key-value pairs in the order specified.
  */
 export default class SortedMap<K, V> extends Collection<MapEntry<K, V>> {
     private root: Node<K, V> | undefined;
     private comparator: Comparator<K>;
-    private _size: number = 0;
 
     /**
      * How many entries are in the {@link SortedMap}.
      */
     public get size() {
-        return this._size;
+        return this.root?.nodeCount ?? 0;
     }
 
     /**
@@ -74,7 +75,6 @@ export default class SortedMap<K, V> extends Collection<MapEntry<K, V>> {
         // if root is null, add root node
         if (undefined === this.root) {
             this.root = new Node(key, value);
-            this._size++;
             return true;
         } else {
             // if root is not null, insert into root
@@ -98,7 +98,6 @@ export default class SortedMap<K, V> extends Collection<MapEntry<K, V>> {
                     },
                     () => {
                         inserted = true;
-                        this._size++;
                     }
                 )
                 ?.balance();
@@ -189,10 +188,6 @@ export default class SortedMap<K, V> extends Collection<MapEntry<K, V>> {
         );
         this.root = this.root?.balance();
 
-        if (undefined !== removedNode) {
-            this._size--;
-        }
-
         return removedNode?.entry;
     }
 
@@ -201,7 +196,7 @@ export default class SortedMap<K, V> extends Collection<MapEntry<K, V>> {
      */
     public deleteGreatest(): MapEntry<K, V> | undefined {
         let deletedEntry: MapEntry<K, V> | undefined = undefined;
-        this.root?.removeLargest(
+        this.root = this.root?.removeLargest(
             (deletedNode) => (deletedEntry = deletedNode.entry)
         );
         return deletedEntry;
@@ -212,17 +207,31 @@ export default class SortedMap<K, V> extends Collection<MapEntry<K, V>> {
      */
     public deleteLeast(): MapEntry<K, V> | undefined {
         let deletedEntry: MapEntry<K, V> | undefined = undefined;
-        this.root?.removeSmallest(
+        this.root = this.root?.removeSmallest(
             (deletedNode) => (deletedEntry = deletedNode.entry)
         );
         return deletedEntry;
     }
 
     /**
+     * @returns The entry with the greatest key.
+     */
+    public getGreatestEntry(): MapEntry<K, V> | undefined {
+        return this.root?.getGreatest()?.entry;
+    }
+
+    /**
+     * @returns The entry with the least key.
+     */
+    public getLeastEntry(): MapEntry<K, V> | undefined {
+        return this.root?.getLeast()?.entry;
+    }
+
+    /**
      * @param index The index at which the {@link MapEntry} would appear. Negative values count from the end starting at -1; -1 being the final item, -2 being the second to final item, etc.
      * @returns The {@link MapEntry} that would appear at the given index when iterating this {@link SortedMap}.
      */
-    public at(index: number): MapEntry<K, V> | undefined {
+    public entryAt(index: number): MapEntry<K, V> | undefined {
         requireSafeInteger(index);
         if (index < 0) {
             if (-index > this.size) {
@@ -230,7 +239,7 @@ export default class SortedMap<K, V> extends Collection<MapEntry<K, V>> {
                     `index ${index} out of bounds -${this.size} <= index < 0`
                 );
             }
-            return this.at(this.size + index);
+            return this.entryAt(this.size + index);
         }
         if (index >= this.size) {
             throw new Error(
@@ -246,7 +255,7 @@ export default class SortedMap<K, V> extends Collection<MapEntry<K, V>> {
      * @returns The key that would appear at the given index when iterating this {@link SortedMap}.
      */
     public keyAt(index: number): K | undefined {
-        return this.at(index)?.[0];
+        return this.entryAt(index)?.[0];
     }
 
     /**
@@ -254,7 +263,7 @@ export default class SortedMap<K, V> extends Collection<MapEntry<K, V>> {
      * @returns The value that would appear at the given index when iterating this {@link SortedMap}.
      */
     public valueAt(index: number): V | undefined {
-        return this.at(index)?.[1];
+        return this.entryAt(index)?.[1];
     }
 
     /**
@@ -288,7 +297,6 @@ export default class SortedMap<K, V> extends Collection<MapEntry<K, V>> {
     }> {
         if (undefined === this.root) {
             this.root = new Node(key, resultOf(newValue));
-            this._size++;
             return { inserted: true, location: this.root };
         }
 
@@ -302,7 +310,6 @@ export default class SortedMap<K, V> extends Collection<MapEntry<K, V>> {
                 location = node;
             },
             (node) => {
-                this._size++;
                 location = node;
                 inserted = false;
             }
@@ -356,6 +363,14 @@ class Node<K, V = undefined> implements Iterable<Node<K, V>> {
 
     public set value(value: V) {
         if (undefined !== value) this._value = value;
+    }
+
+    public get [0](): K {
+        return this.key;
+    }
+
+    public get [1](): V {
+        return this.value;
     }
 
     public get entry(): MapEntry<K, V> {
@@ -623,6 +638,28 @@ class Node<K, V = undefined> implements Iterable<Node<K, V>> {
             this.left = this.left.removeSmallest(getRemovedNode);
             return this.balance();
         }
+    }
+
+    /**
+     * @returns The largest subnode.
+     */
+    public getGreatest(): Node<K, V> {
+        let current: Node<K, V> = this;
+        while (current.right !== undefined) {
+            current = current.right;
+        }
+        return current;
+    }
+
+    /**
+     * @returns The least subnode.
+     */
+    public getLeast(): Node<K, V> {
+        let current: Node<K, V> = this;
+        while (current.left !== undefined) {
+            current = current.left;
+        }
+        return current;
     }
 
     /**

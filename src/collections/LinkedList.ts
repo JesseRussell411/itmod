@@ -27,6 +27,15 @@ export default class LinkedList<T> extends Collection<T> {
     private _tail?: Node<T>;
     private _size: number = 0;
 
+    constructor(values?: Iterable<T>) {
+        super();
+        if (values !== undefined) {
+            for (const value of values) {
+                this.push(value);
+            }
+        }
+    }
+
     /** The node at index 0. */
     public get head(): LinkedListNode<T> | undefined {
         return this._head;
@@ -131,7 +140,7 @@ export default class LinkedList<T> extends Collection<T> {
         this._tail = current;
 
         while (current !== undefined) {
-            const wasNext = current.next;
+            const next = current.next;
 
             if (current.previous === undefined) {
                 delete current.next;
@@ -139,15 +148,15 @@ export default class LinkedList<T> extends Collection<T> {
                 current.next = current.previous;
             }
 
-            if (wasNext === undefined) {
+            if (next === undefined) {
                 // was final node, now first node
                 this._head = current;
                 delete current.previous;
             } else {
-                current.previous = wasNext;
+                current.previous = next;
             }
 
-            current = wasNext;
+            current = next;
         }
     }
 
