@@ -1,5 +1,5 @@
 /**
- * A comparator which returns a number representing the comparison of its two arguments.
+ * A function which returns a number representing the comparison of its two arguments.
  * @returns  - positive: first > second
  *  - negative: first < second
  *  - 0: first = second
@@ -30,7 +30,7 @@ export function isComparator<T>(order: Order<T>): order is Comparator<T> {
  * @returns Whether the given {@link Order} is represented by a {@link FieldSelector}.
  */
 export function isFieldSelector<T>(order: Order<T>): order is FieldSelector<T> {
-    return order instanceof Function && order.length === 1;
+    return order instanceof Function && order.length < 2;
 }
 
 /**
@@ -45,7 +45,7 @@ export function isField<T>(order: Order<T>): order is Field<T> {
  */
 export function asComparator<T>(order: Order<T>): Comparator<T> {
     if (order instanceof Function) {
-        if (order.length >= 2) {
+        if (order.length > 1) {
             return order as Comparator<T>;
         } else {
             return (a: T, b: T) =>
@@ -84,8 +84,8 @@ export const autoComparator: Comparator<unknown> = (
 
     // string,String     -- 4
     // symbol,Symbol     -- 5
-    // date       -- 6
-    // array      -- 7
+    // Date       -- 6
+    // Array      -- 7
     // object     -- 8
     // function   -- 9
 
