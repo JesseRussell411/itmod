@@ -81,7 +81,7 @@ export function asComparator<T>(order: Order<T>): Comparator<T> {
  *  - {@link Date}: earlier {@link Date}s come before later {@link Date}s
  *  - the rest: not compared, 0 is returned
  *
- *  \*{@link Array.sort} always moves undefined values to the end of the {@link Array} regardless of the {@link Comparator};
+ *  \* {@link Array.sort} always moves undefined values to the end of the {@link Array} regardless of the {@link Comparator}.
  */
 export const autoComparator: Comparator<unknown> = (
     a: unknown,
