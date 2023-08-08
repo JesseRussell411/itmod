@@ -11,6 +11,7 @@ export function range(
     end: bigint,
     step: bigint
 ): Iterable<bigint>;
+
 /**
  * @returns An {@link Iterable} over a range of integers from start to end, incremented by 1 or -1 if end is less than start.
  * @param start The first number in the sequence.

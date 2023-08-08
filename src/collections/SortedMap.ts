@@ -17,7 +17,7 @@ import { MapEntry } from "./MapEntry";
 /**
  * A map that stores key-value pairs in the order specified.
  */
-export default class SortedMap<K, V> implements Collection<MapEntry<K, V>> {
+export default class SortedMap<K, V> extends Collection<MapEntry<K, V>> {
     private root: Node<K, V> | undefined;
     private comparator: Comparator<K>;
     private _size: number = 0;
@@ -30,23 +30,10 @@ export default class SortedMap<K, V> implements Collection<MapEntry<K, V>> {
     }
 
     /**
-     * Whether the {@link SortedMap} contains no entries.
-     */
-    public get isEmpty() {
-        return this.size <= 0;
-    }
-
-    /**
-     * Whether the {@link SortedMap} contains any entries.
-     */
-    public get notEmpty() {
-        return !this.isEmpty;
-    }
-
-    /**
      * @param order How to compare the keys. Defaults to {@link autoComparator}.
      */
     public constructor(order: Order<K> = autoComparator) {
+        super();
         this.comparator = asComparator(order);
     }
 
@@ -288,13 +275,12 @@ export default class SortedMap<K, V> implements Collection<MapEntry<K, V>> {
 
     /**
      * Locates the entry with the given key. If it's not found, a new entry is inserted.
-     *
      */
     private locateOrInsert(
         key: K,
         newValue: V | (() => V)
     ): Readonly<{
-        /** Whether the entry had to be inserts because it wasn't located. */
+        /** Whether the entry had to be inserted because it wasn't located. */
         inserted: boolean;
 
         /** Where the entry is located. */
@@ -477,7 +463,7 @@ class Node<K, V = undefined> implements Iterable<Node<K, V>> {
         // right shouldn't be undefined if this function is being called
         const right = this._right!;
 
-        // a undefined reference exception will be thrown here, before this._right is set, if right is undefined
+        // an undefined reference exception will be thrown here, before this._right is set, if right is undefined
         // so it's safe not to check.
         this.right = right._left;
         right.left = this;
@@ -488,7 +474,7 @@ class Node<K, V = undefined> implements Iterable<Node<K, V>> {
         // left shouldn't be undefined if this function is being called
         const left = this._left!;
 
-        // a undefined reference exception will be thrown here, before this._left is set, if left is undefined
+        // an undefined reference exception will be thrown here, before this._left is set, if left is undefined
         // so it's safe not to check.
         this.left = left._right;
         left.right = this;

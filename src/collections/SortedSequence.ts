@@ -7,7 +7,7 @@ type Entry<T> = { value: T; index: bigint };
 /**
  * A sequence of items, optionally with a max size, that maintains sorted order with insertion order as a fallback for duplicate values.
  */
-export default class SortedSequence<T> implements Collection<T> {
+export default class SortedSequence<T> extends Collection<T> {
     private readonly data: SortedMap<Entry<T>, undefined>;
     public readonly sizeLimit?: Readonly<{
         maxSize: number;
@@ -28,6 +28,7 @@ export default class SortedSequence<T> implements Collection<T> {
             keep: "greatest" | "least";
         }
     ) {
+        super();
         const comparator = asComparator(order);
         this.data = new SortedMap<Entry<T>, undefined>((a, b) => {
             const cmp = comparator(a.value, b.value);
@@ -58,20 +59,22 @@ export default class SortedSequence<T> implements Collection<T> {
     }
 
     /**
-     * Deletes the greatest value from the list.
+     * Deletes the greatest value from the sequence.
      */
     public deleteGreatest() {
         return this.data.deleteGreatest() !== undefined;
     }
 
     /**
-     * Deletes the least value from the list.
+     * Deletes the least value from the sequence.
      */
     public deleteLeast() {
         return this.data.deleteLeast() !== undefined;
     }
 
-    /** Add many values to the sequence. */
+    /**
+     * Add many values to the sequence.
+     */
     public pushMany(values: Iterable<T>) {
         for (const value of values) {
             this.push(value);
