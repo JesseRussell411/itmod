@@ -169,7 +169,6 @@ class Node<K, V> implements SortedMapEntry<K, V> {
 /**
  * A map that stores key-value pairs in the order specified.
  */
-
 export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
     private root?: Node<K, V>;
     private comparator: Comparator<K>;
@@ -292,7 +291,7 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
     }
 
     /**
-     * Replaces the key in the given entry with the given new key as long as two conditions are met: the entry belongs to this map; and the new key is equal to the entry's current key according to this map's {@link Comparator}.
+     * Replaces the key in the given entry with the given new key as long as two conditions are met: the entry belongs to this map; and the new key is equal to the entry's current key according to this map's {@link Order}.
      *
      * @returns Whether the key was replaced.
      */

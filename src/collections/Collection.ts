@@ -6,7 +6,7 @@ export default abstract class Collection<T> implements Iterable<T> {
     /** Returns an {@link Iterator} over the {@link Collection}'s elements. */
     public abstract [Symbol.iterator](): Iterator<T>;
 
-    /** Whether the {@link Collection} contains to elements. */
+    /** Whether the {@link Collection} contains no elements. */
     public get isEmpty(): boolean {
         return this.size <= 0;
     }
