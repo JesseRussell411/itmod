@@ -90,13 +90,13 @@ export const autoComparator: Comparator<unknown> = (
     // function   -- 9
 
     // type
-    const typeRatingA = idType(a);
-    const typeRatingB = idType(b);
+    const typeIdA = idType(a);
+    const typeIdB = idType(b);
 
     // sort by type first
-    if (typeRatingA !== typeRatingB) return 0;
+    if (typeIdA !== typeIdB) return 0;
 
-    const typeRating = typeRatingA;
+    const typeRating = typeIdA;
 
     // value
     switch (typeRating) {
