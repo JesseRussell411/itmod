@@ -1,3 +1,4 @@
+import Itmod from "../Itmod";
 import { isIterable } from "./is";
 import { emptyIterator } from "./iterables";
 
@@ -9,6 +10,8 @@ import { emptyIterator } from "./iterables";
 export function asArray<T>(collection: Iterable<T> | undefined): readonly T[] {
     if (Array.isArray(collection)) {
         return collection;
+    } else if (collection instanceof Itmod) {
+        return collection.asArray();
     } else {
         return [...(collection ?? [])];
     }
@@ -22,6 +25,8 @@ export function asArray<T>(collection: Iterable<T> | undefined): readonly T[] {
 export function asSet<T>(collection: Iterable<T> | undefined): ReadonlySet<T> {
     if (collection instanceof Set) {
         return collection;
+    } else if (collection instanceof Itmod) {
+        return collection.asSet();
     } else {
         return new Set(collection);
     }
