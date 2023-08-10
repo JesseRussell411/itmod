@@ -1,3 +1,4 @@
+import Itmod from "../Itmod";
 import { requireNonNegative, requireSafeInteger } from "../require";
 import Collection from "./Collection";
 
@@ -9,7 +10,7 @@ import Collection from "./Collection";
  * Note that an {@link Array} is allocated at creation that is equal in size to the maxSize.
  */
 export default class CircularBuffer<T> extends Collection<T> {
-    private readonly data: (T | undefined)[];
+    private data: (T | undefined)[];
     private offset: number;
     private _size: number;
 
@@ -31,6 +32,15 @@ export default class CircularBuffer<T> extends Collection<T> {
                 yield self.at(i)!;
             }
         })();
+    }
+
+    /**
+     * Deletes all elements from the buffer.
+     */
+    public clear(): void {
+        this.data = new Array(this.maxSize);
+        this.size = 0;
+        this.offset = 0;
     }
 
     /** The maximum number of elements that can be stored in the buffer before elements are overwritten. */
@@ -134,8 +144,22 @@ export default class CircularBuffer<T> extends Collection<T> {
         return result;
     }
 
+    public toArray(): T[] {
+        if (this.offset > this.maxSize - this.size) {
+            return [
+                ...this.data.slice(
+                    this.offset,
+                    this.offset + (this.maxSize - this.offset)
+                ),
+                ...this.data.slice(0, this.offset - (this.maxSize - this.size)),
+            ] as T[];
+        } else {
+            return this.data.slice(this.offset, this.offset + this.size) as T[];
+        }
+    }
+
     /** @returns The index in {@link data} of the final element. */
-    private finalIndex() {
+    private finalIndex(): number {
         if (this.offset > this.maxSize - this.size) {
             return this.offset - (this.maxSize - this.size) - 1;
         } else {
@@ -144,7 +168,7 @@ export default class CircularBuffer<T> extends Collection<T> {
     }
 
     /** @returns The index in {@link data} one place following the final element. */
-    private nextFinalIndex() {
+    private nextFinalIndex(): number {
         if (this.offset >= this.maxSize - this.size) {
             return this.offset - (this.maxSize - this.size);
         } else {
@@ -153,7 +177,7 @@ export default class CircularBuffer<T> extends Collection<T> {
     }
 
     /** @returns The index in {@link data} one place preceding the first element. */
-    private previousFirstIndex() {
+    private previousFirstIndex(): number {
         if (this.offset === 0) {
             return this.maxSize - 1;
         } else {
@@ -162,7 +186,7 @@ export default class CircularBuffer<T> extends Collection<T> {
     }
 
     /** @returns The index in {@link data} one place following the first element. */
-    private nextFirstIndex() {
+    private nextFirstIndex(): number {
         if (this.offset === this.data.length - 1) {
             return 0;
         } else {

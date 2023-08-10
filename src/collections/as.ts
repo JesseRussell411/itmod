@@ -1,34 +1,30 @@
-import Itmod from "../Itmod";
 import { isIterable } from "./is";
 import { emptyIterator } from "./iterables";
+import { toArray, toSet } from "./to";
 
 /**
- * @returns The given collection is the form of a {@link ReadonlyArray}.
+ * @returns The given collection in the form of a {@link ReadonlyArray}.
  * If the collection is already an instance of an {@link Array}, the collection itself is returned;
  * otherwise, the collection is copied into a new {@link Array} and that is returned.
  */
 export function asArray<T>(collection: Iterable<T> | undefined): readonly T[] {
     if (Array.isArray(collection)) {
         return collection;
-    } else if (collection instanceof Itmod) {
-        return collection.asArray();
     } else {
-        return [...(collection ?? [])];
+        return toArray(collection);
     }
 }
 
 /**
- * @returns The given collection is the form of a {@link ReadonlySet}.
+ * @returns The given collection in the form of a {@link ReadonlySet}.
  * If the collection is already an instance of a {@link Set}, the collection itself is returned;
  * otherwise, the collection is copied into a new {@link Set} and that is returned.
  */
 export function asSet<T>(collection: Iterable<T> | undefined): ReadonlySet<T> {
     if (collection instanceof Set) {
         return collection;
-    } else if (collection instanceof Itmod) {
-        return collection.asSet();
     } else {
-        return new Set(collection);
+        return toSet(collection);
     }
 }
 

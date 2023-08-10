@@ -41,4 +41,11 @@ export default abstract class Collection<T> implements Iterable<T> {
             return index < bounds;
         }
     }
+
+    /**
+     * @returns The {@link Collection}'s contents copied into an {@link Array}.
+     */
+    public toArray(): T[] {
+        return [...this];
+    }
 }

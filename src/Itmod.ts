@@ -1,5 +1,5 @@
 import CircularBuffer from "./collections/CircularBuffer";
-import { asArray, asIterable } from "./collections/as";
+import { asArray, asIterable, asSet } from "./collections/as";
 import {
     isArray,
     isArrayAsWritable,
@@ -10,6 +10,7 @@ import {
     cachingIterable as cachedIterable,
     range,
 } from "./collections/iterables";
+import { toArray, toSet } from "./collections/to";
 import NeverEndingOperationError from "./errors/NeverEndingOperationError";
 import NotImplementedError from "./errors/NotImplementedError";
 import { identity, resultOf, returns } from "./functional";
@@ -47,6 +48,9 @@ import { General } from "./types/literals";
 // TODO unit tests
 
 // TODO unit tests
+
+// TODO sequenceEqual
+// TODO join, leftjoin, groupjoin
 export type Comparison =
     | "equals"
     | "lessThan"
@@ -710,12 +714,13 @@ export default class Itmod<T> implements Iterable<T> {
      */
     public get toArray() {
         const self = this;
+        const externalToArray = toArray;
         return function toArray(): T[] {
             const source = self.getSource();
             if (self.properties.fresh && isArrayAsWritable(source)) {
                 return source;
             } else {
-                return [...source];
+                return externalToArray(source);
             }
         };
     }
@@ -725,12 +730,13 @@ export default class Itmod<T> implements Iterable<T> {
      */
     public get toSet() {
         const self = this;
+        const externalToSet = toSet;
         return function toSet(): Set<T> {
             const source = self.getSource();
             if (self.properties.fresh && isSetAsWritable(source)) {
                 return source;
             } else {
-                return new Set(source);
+                return externalToSet(source);
             }
         };
     }
@@ -740,13 +746,10 @@ export default class Itmod<T> implements Iterable<T> {
      */
     public get asArray() {
         const self = this;
-        return function toArray(): readonly T[] {
+        const externalAsArray = asArray;
+        return function asArray(): readonly T[] {
             const source = self.getSource();
-            if (isArray(source)) {
-                return source;
-            } else {
-                return [...source];
-            }
+            return externalAsArray(source);
         };
     }
 
@@ -755,13 +758,10 @@ export default class Itmod<T> implements Iterable<T> {
      */
     public get asSet() {
         const self = this;
-        return function toSet(): ReadonlySet<T> {
+        const externalAsSet = asSet;
+        return function asSet(): ReadonlySet<T> {
             const source = self.getSource();
-            if (isSet(source)) {
-                return source;
-            } else {
-                return new Set(source);
-            }
+            return externalAsSet(source);
         };
     }
 
