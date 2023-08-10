@@ -1,368 +1,86 @@
-// // avl tree implementation with *no dependencies*
-
-import { doNothing, resultOf } from "../functional";
-import { requireSafeInteger } from "../require";
-import { Comparator, Order, asComparator, autoComparator } from "../sorting";
+import { returns } from "../functional";
+import {
+    Comparator,
+    Order,
+    asComparator,
+    autoComparator,
+    cmpGE,
+    cmpGT,
+    cmpLE,
+    cmpLT,
+    cmpNQ,
+} from "../sorting";
+import { MapEntry } from "../types/MapEntry";
 import Collection from "./Collection";
-import { MapEntry } from "./MapEntry";
 
-// TODO? red-black tree, this is an avl tree because avl trees are easy
-
-// design note: If they ever add a sorted map or set to the ecmascript standard,
-// I will be very happy to make this a deprecated wrapper around that,
-// or even a child class of it.
-
-// I'm sure whatever the V8 team can put together in C would be much more efficient than my undergrad level, intro to data structures avl tree.
-
-// TODO just redo this whole thing, make it more like LinkedList in design
-
-/**
- * A map that stores key-value pairs in the order specified.
- */
-export default class SortedMap<K, V> extends Collection<MapEntry<K, V>> {
-    private root: Node<K, V> | undefined;
-    private comparator: Comparator<K>;
-
-    /**
-     * How many entries are in the {@link SortedMap}.
-     */
-    public get size() {
-        return this.root?.nodeCount ?? 0;
-    }
-
-    /**
-     * @param order How to compare the keys. Defaults to {@link autoComparator}.
-     */
-    public constructor(order: Order<K> = autoComparator) {
-        super();
-        this.comparator = asComparator(order);
-    }
-
-    public *[Symbol.iterator]() {
-        if (undefined === this.root) return;
-        for (const node of this.root) {
-            yield node.entry;
-        }
-    }
-
-    // TODO keys() and values() and entries() that return iterables of keys and values and entries like in Map
-
-    /**
-     * Inserts the key into the tree.
-     *
-     * @returns Whether the key wasn't already in the tree.
-     *
-     * @param key The key to insert.
-     * @param overwrite If the key is already in the tree, it is overwritten with the output of this function. Defaults to overwriting the existing value.
-     */
-    public set(
-        key: K,
-        value: V,
-        overwrite: (
-            /** The value to the key that is already in the tree */
-            existingValue: V,
-            /** The key that is already in the tree. */
-            existingKey: K,
-            /** The value that was suppose to be inserted. */
-            value: V,
-            /** The key that was suppose to be inserted. */
-            key: K
-        ) => readonly [overwriteKey: boolean, value: V] = (_, __, value) => [
-            true,
-            value,
-        ]
-    ): boolean {
-        // if root is null, add root node
-        if (undefined === this.root) {
-            this.root = new Node(key, value);
-            return true;
-        } else {
-            // if root is not null, insert into root
-            let inserted = false;
-            this.root = this.root
-                .locateOrInsert(
-                    this.comparator,
-                    key,
-                    value,
-                    (location) => {
-                        const [overwriteKey, newValue] = overwrite(
-                            location.value,
-                            location.key,
-                            value,
-                            key
-                        );
-                        location.value = newValue;
-                        if (overwriteKey) {
-                            location.key = key;
-                        }
-                    },
-                    () => {
-                        inserted = true;
-                    }
-                )
-                ?.balance();
-
-            return inserted;
-        }
-    }
-
-    /**
-     * Gets the values mapped to the given key.
-     * Alias for {@link getValue}.
-     * @returns The value or undefined if no value is mapped to the key.
-     */
-    public get(key: K): V | undefined {
-        return this.getValue(key);
-    }
-
-    /**
-     * Gets the values mapped to the given key.
-     * @returns The value or undefined if no value is mapped to the key.
-     */
-    public getValue(key: K): V | undefined {
-        return this.root?.locate(this.comparator, key)?.value ?? undefined;
-    }
-
-    /**
-     * Gets the key that matches the given key based on the comparator.
-     * @returns The key or undefined if it does not exist in the {@link SortedMap}.
-     */
-    public getKey(key: K): K | undefined {
-        return this.root?.locate(this.comparator, key)?.key ?? undefined;
-    }
-
-    /**
-     * Gets the entry whith the key that matches the given key according to the comparator.
-     * @returns The entry or undefined if it does not exist in the {@link SortedMap}.
-     */
-    public getEntry(key: K): MapEntry<K, V> | undefined {
-        return this.root?.locate(this.comparator, key)?.entry ?? undefined;
-    }
-
-    /**
-     * Gets the key that matches the given key according to the comparator. If the key is not found, it is inserted with the given value or the result of the given function.
-     * @param newValue The value to insert if the key is not found. If this is a function, its result will be used instead.
-     * @returns The key that matches the given key or the given key if it was not found.
-     */
-    public getKeyOrSet(key: K, newValue: V | (() => V)): K {
-        return this.locateOrInsert(key, newValue).location.key;
-    }
-
-    /**
-     * Gets the value that is mapped to the given key according to the comparator. If the key is not found, it is inserted with the given value or the result of the given function.
-     * @param newValue The value to insert if the key is not found. If this is a function, its result will be used instead.
-     * @returns The value that was mapped to the key or the inserted value if the key was not found.
-     */
-    public getOrSet(key: K, newValue: V | (() => V)): V {
-        return this.locateOrInsert(key, newValue).location.value;
-    }
-
-    /**
-     * Gets the entry that is mapped to the given key according to the comparator. If the key is not found, it is inserted with the given value or the result of the given function.
-     * @param newValue The value to insert if the key is not found. If this is a function, its result will be used instead.
-     * @returns The entry that was mapped to the key or the inserted entry if the key was not found.
-     */
-    public getEntryOrSet(key: K, newValue: V | (() => V)): MapEntry<K, V> {
-        return this.locateOrInsert(key, newValue).location.entry;
-    }
-
-    /**
-     * @param key The key to look for a match for.
-     * @returns Whether the {@link SortedMap} contains a matching key.
-     */
-    public hasKey(key: K): boolean {
-        return this.root?.locate(this.comparator, key) !== undefined;
-    }
-
-    /**
-     * Removes the entry with the given key from the {@link SortedMap}.
-     * @returns The entry that was removed or undefined if the key wasn't found and no entry was removed.
-     */
-    public delete(key: K): MapEntry<K, V> | undefined {
-        let removedNode: Node<K, V> | undefined;
-
-        this.root = this.root?.remove(
-            this.comparator,
-            key,
-            (removed) => (removedNode = removed)
-        );
-        this.root = this.root?.balance();
-
-        return removedNode?.entry;
-    }
-
-    /**
-     * Deletes the entry with the largest key.
-     */
-    public deleteGreatest(): MapEntry<K, V> | undefined {
-        let deletedEntry: MapEntry<K, V> | undefined = undefined;
-        this.root = this.root?.removeLargest(
-            (deletedNode) => (deletedEntry = deletedNode.entry)
-        );
-        return deletedEntry;
-    }
-
-    /**
-     * Deletes the entry with the smallest key.
-     */
-    public deleteLeast(): MapEntry<K, V> | undefined {
-        let deletedEntry: MapEntry<K, V> | undefined = undefined;
-        this.root = this.root?.removeSmallest(
-            (deletedNode) => (deletedEntry = deletedNode.entry)
-        );
-        return deletedEntry;
-    }
-
-    /**
-     * @returns The entry with the greatest key.
-     */
-    public getGreatestEntry(): MapEntry<K, V> | undefined {
-        return this.root?.getGreatest()?.entry;
-    }
-
-    /**
-     * @returns The entry with the least key.
-     */
-    public getLeastEntry(): MapEntry<K, V> | undefined {
-        return this.root?.getLeast()?.entry;
-    }
-
-    /**
-     * @param index The index at which the {@link MapEntry} would appear. Negative values count from the end starting at -1; -1 being the final item, -2 being the second to final item, etc.
-     * @returns The {@link MapEntry} that would appear at the given index when iterating this {@link SortedMap}.
-     */
-    public entryAt(index: number): MapEntry<K, V> | undefined {
-        requireSafeInteger(index);
-        if (index < 0) {
-            if (-index > this.size) {
-                throw new Error(
-                    `index ${index} out of bounds -${this.size} <= index < 0`
-                );
-            }
-            return this.entryAt(this.size + index);
-        }
-        if (index >= this.size) {
-            throw new Error(
-                `index ${index} out of bounds 0 <= index < ${this.size}`
-            );
-        }
-        return this.root?.at(index)?.entry;
-    }
-
-    /**
-     *
-     * @param index The index at which the key would appear. Negative values count from the end starting at -1; -1 being the final item, -2 being the second to final item, etc.
-     * @returns The key that would appear at the given index when iterating this {@link SortedMap}.
-     */
-    public keyAt(index: number): K | undefined {
-        return this.entryAt(index)?.[0];
-    }
-
-    /**
-     * @param index The index at which the key would appear. Negative values count from the end starting at -1; -1 being the final item, -2 being the second to final item, etc.
-     * @returns The value that would appear at the given index when iterating this {@link SortedMap}.
-     */
-    public valueAt(index: number): V | undefined {
-        return this.entryAt(index)?.[1];
-    }
-
-    /**
-     * @param lowerBound The lowest possible key to return (inclusive lower bound).
-     * @param upperBound What all keys returned must be less than (exclusive upper bound).
-     * @returns A {@link Generator} over the specified range of entries.
-     */
-    public *range(lowerBound: K, upperBound: K): Generator<MapEntry<K, V>> {
-        if (undefined === this.root) return;
-        for (const node of this.root.range(
-            this.comparator,
-            lowerBound,
-            upperBound
-        )) {
-            yield node.entry;
-        }
-    }
-
-    /**
-     * Locates the entry with the given key. If it's not found, a new entry is inserted.
-     */
-    private locateOrInsert(
-        key: K,
-        newValue: V | (() => V)
-    ): Readonly<{
-        /** Whether the entry had to be inserted because it wasn't located. */
-        inserted: boolean;
-
-        /** Where the entry is located. */
-        location: Node<K, V>;
-    }> {
-        if (undefined === this.root) {
-            this.root = new Node(key, resultOf(newValue));
-            return { inserted: true, location: this.root };
-        }
-
-        let inserted = false;
-        let location: Node<K, V> | undefined;
-        this.root = this.root.locateOrInsert(
-            this.comparator,
-            key,
-            newValue,
-            (node) => {
-                location = node;
-            },
-            (node) => {
-                location = node;
-                inserted = false;
-            }
-        );
-
-        return { inserted, location: location! };
-    }
+export interface SortedMapEntry<K, V> extends MapEntry<K, V> {
+    readonly key: K;
+    readonly value: V;
+    /** The map that this entry belongs to. Undefined if the entry has been deleted. */
+    readonly map?: SortedMap<K, V>;
 }
 
-function calcBalanceFactor(
-    left: Node<any, any> | undefined,
-    right: Node<any, any> | undefined
-): number {
-    return (right?._depth ?? 0) - (left?._depth ?? 0);
-}
+class Node<K, V> implements SortedMapEntry<K, V> {
+    public key: K;
+    // @ts-ignore
+    private _value: V;
+    public map?: SortedMap<K, V>;
+    public depth: number;
+    public nodeCount: number;
+    public balanceFactor: number;
+    private _left?: Node<K, V>;
+    private _right?: Node<K, V>;
 
-function calcDepth(
-    left: Node<any, any> | undefined,
-    right: Node<any, any> | undefined
-): number {
-    return Math.max(right?.depth ?? -1, left?.depth ?? -1) + 1;
-}
-
-function calcNodeCount(
-    left: Node<any, any> | undefined,
-    right: Node<any, any> | undefined
-): number {
-    return (left?.nodeCount ?? 0) + (right?.nodeCount ?? 0) + 1;
-}
-
-class Node<K, V = undefined> implements Iterable<Node<K, V>> {
-    // Any field that would be undefined is left un-set to save memory.
-    // That is what the ts-ignores are for. So that typescript doesn't throw errors about these fields not being guarantied to be set.
-
-    //@ts-ignore
-    key: K;
-    //@ts-ignore
-    _value: V;
-    //@ts-ignore
-    _left: Node<K, V> | undefined;
-    //@ts-ignore
-    _right: Node<K, V> | undefined;
-
-    _nodeCount: number;
-
-    _depth: number;
-
-    public get value() {
+    public get value(): V {
         return this._value;
     }
-
     public set value(value: V) {
-        if (undefined !== value) this._value = value;
+        if (value === undefined) {
+            //@ts-ignore
+            delete this._value;
+        } else {
+            this._value = value;
+        }
+    }
+
+    public get left(): Node<K, V> | undefined {
+        return this._left;
+    }
+    public set left(value: Node<K, V> | undefined) {
+        if (value === undefined) {
+            delete this._left;
+        } else {
+            this._left = value;
+        }
+    }
+
+    public get right(): Node<K, V> | undefined {
+        return this._right;
+    }
+    public set right(value: Node<K, V> | undefined) {
+        if (value === undefined) {
+            delete this._right;
+        } else {
+            this._right = value;
+        }
+    }
+
+    public constructor(
+        key: K,
+        value: V,
+        map: SortedMap<K, V>,
+        left?: Node<K, V>,
+        right?: Node<K, V>
+    ) {
+        this.key = key;
+        this.value = value;
+        this.map = map;
+        this.left = left;
+        this.right = right;
+
+        this.depth = this.calcDepth();
+        this.nodeCount = this.calcNodeCount();
+        this.balanceFactor = this.calcBalanceFactor();
     }
 
     public get [0](): K {
@@ -373,333 +91,512 @@ class Node<K, V = undefined> implements Iterable<Node<K, V>> {
         return this.value;
     }
 
-    public get entry(): MapEntry<K, V> {
-        return [this.key, this.value];
+    public update() {
+        this.depth = this.calcDepth();
+        this.nodeCount = this.calcNodeCount();
+        this.balanceFactor = this.calcBalanceFactor();
     }
 
-    public get left() {
-        return this._left;
+    private calcDepth(): number {
+        return Math.max(this.left?.depth ?? 0, this.right?.depth ?? 0) + 1;
+    }
+    private calcNodeCount(): number {
+        return (this.left?.nodeCount ?? 0) + (this.right?.nodeCount ?? 0) + 1;
     }
 
-    public set left(left: Node<K, V> | undefined) {
-        this._left = left;
+    private calcBalanceFactor(): number {
+        return (this.right?.depth ?? 0) - (this.left?.depth ?? 0);
+    }
+
+    /**
+     * Performs a left rotation. Assumes that {@link right} is not undefined.
+     * @returns The node to replace this one with.
+     */
+    public rotateLeft(): Node<K, V> {
+        const right = this.right;
+        this.right = right!.left;
+        right!.left = this;
+        right!.update();
         this.update();
+        return right!;
     }
 
-    public get right() {
-        return this._right;
+    /**
+     * Performs a right rotation. Assumes that {@link left} is not undefined.
+     * @returns The node to replace this one with.
+     */
+    public rotateRight(): Node<K, V> {
+        const left = this.left;
+        this.left = left!.right;
+        left!.right = this;
+        left!.update();
+        this!.update();
+        return left!;
     }
 
-    public set right(right: Node<K, V> | undefined) {
-        this._right = right;
-        this.update();
+    /**
+     * Balances the node.
+     * @returns The node to replace this one with.
+     */
+    public balance(): Node<K, V> {
+        if (this.balanceFactor < -1) {
+            return this.rotateRight();
+        } else if (this.balanceFactor > 1) {
+            return this.rotateLeft();
+        } else {
+            return this;
+        }
     }
 
-    public get balanceFactor(): number {
-        return calcBalanceFactor(this.left, this.right);
+    /**
+     * Cuts all ties to the parent map.
+     */
+    public emancipate(): void {
+        delete this.map;
+        delete this.left;
+        delete this.right;
+    }
+}
+
+// TODO? red-black tree, this is an avl tree because avl trees are easy
+
+// design note: If they ever add a sorted map or set to the ecmascript standard,
+// I will be very happy to make this a deprecated wrapper around that,
+// or even a child class of it.
+
+// I'm sure whatever the V8 team can put together in C would be much more efficient than my undergrad level, intro to data structures avl tree.
+
+/**
+ * A map that stores key-value pairs in the order specified.
+ */
+
+export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
+    private root?: Node<K, V>;
+    private comparator: Comparator<K>;
+
+    /**
+     * @param order How to sort the keys. Defaults to {@link autoComparator}.
+     */
+    public constructor(order: Order<K> = autoComparator) {
+        super();
+        this.comparator = asComparator(order);
     }
 
-    public get depth() {
-        return this._depth;
+    public get size(): number {
+        return this.root?.nodeCount ?? 0;
     }
 
-    public get nodeCount() {
-        return this._nodeCount;
+    public [Symbol.iterator]() {
+        return this._iterator(this.root);
     }
 
-    public constructor(
+    private *_iterator(node: Node<K, V> | undefined): Generator<Node<K, V>> {
+        if (node === undefined) return;
+        yield* this._iterator(node.left);
+        yield node;
+        yield* this._iterator(node.right);
+    }
+
+    /**
+     * @returns The entry with the given key or undefined if it could not be found.
+     */
+    public getEntry(key: K): SortedMapEntry<K, V> | undefined {
+        return this.getNode(key);
+    }
+
+    /**
+     * @returns The value mapped to the given key or undefined if it could not be found.
+     */
+    public get(key: K): V | undefined {
+        return this.getEntry(key)?.value;
+    }
+
+    /**
+     * @return The entry with the largest key or undefined if the map is empty.
+     */
+    public getLargestEntry(): SortedMapEntry<K, V> | undefined {
+        return this.getLargestNode();
+    }
+
+    /**
+     * @return The entry with the smallest key or undefined if the map is empty.
+     */
+    public getSmallestEntry(): SortedMapEntry<K, V> | undefined {
+        return this.getSmallestNode();
+    }
+
+    /**
+     * Sets the given key to be mapped to the given value.
+     *
+     * @param replace Whether to replace an existing mapping if it exists.
+     *
+     * @returns The entry containing the mapping.
+     */
+    public set(
         key: K,
         value: V,
-        left: Node<K, V> | undefined = undefined,
-        right: Node<K, V> | undefined = undefined
-    ) {
-        if (undefined !== key) this.key = key;
-        if (undefined !== value) this._value = value;
-        if (undefined !== left) this._left = left;
-        if (undefined !== right) this._right = right;
-        this._depth = calcDepth(left, right);
-        this._nodeCount = calcNodeCount(left, right);
-    }
+        replace: boolean = true
+    ): SortedMapEntry<K, V> {
+        let computed = false;
+        const node = this.getNodeOrCompute(key, () => {
+            computed = true;
+            return value;
+        });
 
-    public at(index: number): Node<K, V> | undefined {
-        const leftNodeCount = this.left?.nodeCount ?? 0;
-        if (index < leftNodeCount) {
-            return this.left?.at(index);
-        } else if (index > leftNodeCount) {
-            return this.right?.at(index - leftNodeCount);
-        } else {
-            // index === leftNodeCount
-            return this;
+        if (!computed && replace) {
+            node.key = key;
+            node.value = value;
         }
-    }
 
-    public *[Symbol.iterator](): Iterator<Node<K, V>> {
-        // no worries of stack overflow because the depth cannot be more than log_2(2^64) or 64
-        if (undefined !== this.left) yield* this.left;
-        yield this;
-        if (undefined !== this.right) yield* this.right;
+        return node;
     }
 
     /**
-     * @param comparator
-     * @param lowerBound inclusive
-     * @param upperBound exclusive
-     * @returns A generator over the specified range of values.
+     * Deletes the entry with the given key from the map.
+     *
+     * @param condition Optional condition. If provided: gets called once before deletion; entry is only deleted if this function returns true.
+     *
+     * @returns The entry that was delete or undefined if an entry with the given key could not be found.
      */
-    public *range(
-        comparator: (a: K, b: K) => number,
-        lowerBound: K,
-        upperBound: K
-    ): Generator<Node<K, V>> {
-        const upperBoundCmp = comparator(upperBound, this.key);
-        if (upperBoundCmp <= 0) return;
-
-        const lowerBoundCmp = comparator(lowerBound, this.key);
-
-        if (lowerBoundCmp < 0 && undefined !== this.left) {
-            yield* this.left.range(comparator, lowerBound, upperBound);
-        }
-
-        if (lowerBoundCmp === 0) {
-            yield this;
-        }
-
-        if (undefined !== this.right) {
-            yield* this.right.range(comparator, lowerBound, upperBound);
-        }
-    }
-
-    public update(): void {
-        this._depth = calcDepth(this._left, this._right);
-        this._nodeCount = calcNodeCount(this._left, this._right);
-    }
-
-    public rotateLeft(): Node<K, V> {
-        // right shouldn't be undefined if this function is being called
-        const right = this._right!;
-
-        // an undefined reference exception will be thrown here, before this._right is set, if right is undefined
-        // so it's safe not to check.
-        this.right = right._left;
-        right.left = this;
-        return right;
-    }
-
-    public rotateRight(): Node<K, V> {
-        // left shouldn't be undefined if this function is being called
-        const left = this._left!;
-
-        // an undefined reference exception will be thrown here, before this._left is set, if left is undefined
-        // so it's safe not to check.
-        this.left = left._right;
-        left.right = this;
-        return left;
-    }
-
-    /** The right most sub node to this node or this node if this node has no right subnode. */
-    public get rightMostSubNode(): Node<K, V> {
-        let result: Node<K, V> = this;
-        while (undefined !== result.right) {
-            result = result.right;
-        }
-        return result;
-    }
-
-    /** The left most sub node to this node or this node if this node has no left subnode. */
-    public get leftMostSubNode(): Node<K, V> {
-        let result: Node<K, V> = this;
-        while (undefined !== result.left) {
-            result = result.left;
-        }
-        return result;
-    }
-
-    public balance(): Node<K, V> {
-        const balanceFactor = this.balanceFactor;
-        if (balanceFactor < -1) {
-            if (undefined !== this.left && this.left.balanceFactor > 0) {
-                // left right case
-                this.left = this.left.rotateLeft();
-                return this.rotateRight();
-            } else {
-                // left left case:
-                return this.rotateRight();
-            }
-        } else if (balanceFactor > 1) {
-            if (undefined !== this.right && this.right.balanceFactor < 0) {
-                // right left case:
-                this.right = this.right.rotateRight();
-                return this.rotateLeft();
-            } else {
-                // right right case:
-                return this.rotateLeft();
-            }
-        }
-
-        return this;
-    }
-
-    public locate(
-        comparator: (a: K, b: K) => number,
-        key: K
-    ): Node<K, V> | undefined {
-        const cmp = comparator(key, this.key);
-        if (cmp < 0) {
-            if (undefined !== this.left) {
-                return this.left.locate(comparator, key);
-            } else {
-                return undefined;
-            }
-        } else if (cmp > 0) {
-            if (undefined !== this.right) {
-                return this.right.locate(comparator, key);
-            } else {
-                return undefined;
-            }
-        } else {
-            return this;
-        }
-    }
-
-    /**
-     * @returns The node at which the key now exists.
-     * @param comparator
-     * @param key
-     * @param newKey
-     */
-    public locateOrInsert(
-        comparator: (a: K, b: K) => number,
+    public delete(
         key: K,
-        newValue: V | (() => V),
-        onLocate: (location: Node<K, V>) => void = doNothing,
-        onInsert: (location: Node<K, V>) => void = doNothing
-    ): Node<K, V> | undefined {
-        const cmp = comparator(key, this.key);
-        if (cmp < 0) {
-            if (undefined === this.left) {
-                this.left = new Node(key, resultOf(newValue));
-                onInsert(this.left);
-                return this;
-            } else {
-                this.left = this.left.locateOrInsert(
-                    comparator,
-                    key,
-                    newValue,
-                    onLocate,
-                    onInsert
-                );
-                return this.balance();
-            }
-        } else if (cmp > 0) {
-            if (undefined === this.right) {
-                this.right = new Node(key, resultOf(newValue));
-                onInsert(this.right);
-                return this;
-            } else {
-                this.right = this.right.locateOrInsert(
-                    comparator,
-                    key,
-                    newValue,
-                    onLocate,
-                    onInsert
-                );
-                return this.balance();
-            }
-        } else {
-            onLocate(this);
-            return this;
-        }
+        condition?: (entry: SortedMapEntry<K, V>) => boolean
+    ): SortedMapEntry<K, V> | undefined {
+        return this.deleteNode(key, condition);
     }
 
     /**
-     * @returns The {@link Node} that replaces this one.
+     * Deletes the entry with the largest key from the map.
+     *
+     * @param condition Optional condition. If provided: gets called once before deletion; entry is only deleted if this function returns true.
+     *
+     * @returns The entry that was deleted or undefined if not entry was deleted.
      */
-    public removeLargest(
-        getRemovedNode: (node: Node<K, V>) => void = doNothing
-    ): Node<K, V> | undefined {
-        if (this.right === undefined) {
-            getRemovedNode(this);
-            return this.left;
-        } else {
-            this.right = this.right.removeLargest(getRemovedNode);
-            return this.balance();
-        }
-    }
-    /**
-     * @returns The {@link Node} that replaces this one.
-     */
-    public removeSmallest(
-        getRemovedNode: (node: Node<K, V>) => void = doNothing
-    ): Node<K, V> | undefined {
-        if (this.left === undefined) {
-            getRemovedNode(this);
-            return this.right;
-        } else {
-            this.left = this.left.removeSmallest(getRemovedNode);
-            return this.balance();
-        }
+    public deleteLargest(
+        condition?: (entry: SortedMapEntry<K, V>) => boolean
+    ): SortedMapEntry<K, V> | undefined {
+        return this.deleteLargestNode(condition);
     }
 
     /**
-     * @returns The largest subnode.
+     * Deletes the entry with the smallest key from the map.
+     *
+     * @param condition Optional condition. If provided: gets called once before deletion; entry is only deleted if this function returns true.
+     *
+     * @returns The entry that was deleted or undefined if not entry was deleted.
      */
-    public getGreatest(): Node<K, V> {
-        let current: Node<K, V> = this;
-        while (current.right !== undefined) {
+    public deleteSmallest(
+        condition?: (entry: SortedMapEntry<K, V>) => boolean
+    ): SortedMapEntry<K, V> | undefined {
+        return this.deleteSmallestNode(condition);
+    }
+
+    /**
+     * Replaces the key in the given entry with the given new key as long as two conditions are met: the entry belongs to this map; and the new key is equal to the entry's current key according to this map's {@link Comparator}.
+     *
+     * @returns Whether the key was replaced.
+     */
+    public reKey(entry: SortedMapEntry<K, V>, newKey: K): boolean {
+        const node = entry as Node<K, V>;
+
+        // does the entry belong to this map?
+        if (node.map !== this) return false;
+        // do the keys match?
+        if (cmpNQ(this.comparator(newKey, node.key))) return false;
+
+        // conditions are met
+        node.key = newKey;
+        return true;
+    }
+
+    /**
+     * Replaces the value in the given entry with the given new value as long as one condition is met: the entry belongs to this map.
+     *
+     * @returns Whether the value was replaced.
+     */
+    public reValue(entry: SortedMapEntry<K, V>, newValue: V): boolean {
+        const node = entry as Node<K, V>;
+
+        // does the entry belong to this map?
+        if (node.map !== this) return false;
+
+        // conditions are met
+        node.value = newValue;
+        return true;
+    }
+
+    /**
+     * Gets the entry with the given key or creates a new one using the value returned by the given function.
+     *
+     * @param compute Returns the value to be used if the entry isn't found. Is called once in that case.
+     */
+    public getEntryOrCompute(key: K, compute: () => V): SortedMapEntry<K, V> {
+        return this.getNodeOrCompute(key, compute);
+    }
+
+    /**
+     * Gets the value mapped to the given key or creates a new mapping to the value returned by the given function.
+     *
+     * @param compute Returns the value to be used if the key isn't found. Is called once in that case.
+     */
+    public getOrCompute(key: K, compute: () => V): V {
+        return this.getEntryOrCompute(key, compute).value;
+    }
+
+    /**
+     * @returns An {@link Iterable} over the entries between the given min and max values.
+     *
+     * @param min Parameters for minimum value. If undefined, the range will start at the entry with the smallest key (inclusive).
+     * @param max Parameters for maximum value. If undefined, the range will end at the entry with the largest key (inclusive).
+     */
+    public getRange(
+        min?: [
+            /** The value to use as the min. */
+            key: K,
+            /** Whether the max value is inclusive or exclusive. Defaults to inclusive. */
+            type?: "inclusive" | "exclusive"
+        ],
+        max?: [
+            /** The value to use as the max. */
+            key: K,
+            /** Whether the min value is inclusive or exclusive. Defaults to inclusive. */
+            type?: "inclusive" | "exclusive"
+        ]
+    ): Iterable<SortedMapEntry<K, V>> {
+        const self = this;
+        function* recur(node: Node<K, V> | undefined): Generator<Node<K, V>> {
+            if (node === undefined) return;
+
+            if (min !== undefined) {
+                const cmp = self.comparator(min[0], node.key);
+                if ((min[1] === "exclusive" ? cmpLE : cmpLT)(cmp)) {
+                    return;
+                }
+            }
+
+            if (max !== undefined) {
+                const cmp = self.comparator(max[0], node.key);
+                if ((max[1] === "exclusive" ? cmpGE : cmpGT)(cmp)) {
+                    return;
+                }
+            }
+
+            yield* recur(node.left);
+            yield node;
+            yield* recur(node.right);
+        }
+
+        return {
+            [Symbol.iterator]() {
+                return recur(self.root);
+            },
+        };
+    }
+
+    private getNode(key: K): Node<K, V> | undefined {
+        let current = this.root;
+        while (current !== undefined) {
+            const cmp = this.comparator(key, current.key);
+
+            if (cmpLT(cmp)) {
+                current = current.left;
+            } else if (cmpGT(cmp)) {
+                current = current?.right;
+            } else {
+                break;
+            }
+        }
+        return current;
+    }
+
+    private getNodeOrCompute(key: K, compute: () => V): Node<K, V> {
+        if (this.root === undefined) {
+            const value = compute();
+            this.root = new Node(key, value, this);
+            return this.root;
+        } else {
+            let node: Node<K, V>;
+            this.root = this._getNodeOrCompute(
+                this.root,
+                key,
+                compute,
+                (n) => (node = n)
+            );
+            return node!;
+        }
+    }
+
+    private _getNodeOrCompute(
+        node: Node<K, V> | undefined,
+        key: K,
+        compute: () => V,
+        getNode: (node: Node<K, V>) => void
+    ): Node<K, V> {
+        if (node === undefined) {
+            const node = new Node(key, compute(), this);
+            getNode(node);
+            return node;
+        }
+
+        const cmp = this.comparator(key, node.key);
+        if (cmpLT(cmp)) {
+            node.left = this._getNodeOrCompute(
+                node.left,
+                key,
+                compute,
+                getNode
+            );
+            node.update();
+            return node.balance();
+        } else if (cmpGT(cmp)) {
+            node.right = this._getNodeOrCompute(
+                node.right,
+                key,
+                compute,
+                getNode
+            );
+            node.update();
+            return node.balance();
+        } else {
+            getNode(node);
+            return node;
+        }
+    }
+
+    private getLargestNode(): Node<K, V> | undefined {
+        let current = this.root;
+        if (current === undefined) return undefined;
+        while (current?.right !== undefined) {
             current = current.right;
         }
         return current;
     }
 
-    /**
-     * @returns The least subnode.
-     */
-    public getLeast(): Node<K, V> {
-        let current: Node<K, V> = this;
+    private getSmallestNode(): Node<K, V> | undefined {
+        let current = this.root;
+        if (current === undefined) return undefined;
         while (current.left !== undefined) {
             current = current.left;
         }
         return current;
     }
 
-    /**
-     * @returns The replacement for this node
-     */
-    public remove(
-        comparator: (a: K, b: K) => number,
+    private deleteNode(
         key: K,
-        getRemovedNode: (removed: Node<K, V>) => void = () => {}
+        condition: (node: Node<K, V>) => boolean = returns(true)
     ): Node<K, V> | undefined {
-        const cmp = comparator(key, this.key);
-        if (cmp < 0) {
-            if (undefined === this.left) return this;
-            this.left = this.left.remove(comparator, key, getRemovedNode);
-            return this.balance();
-        } else if (cmp > 0) {
-            if (undefined === this.right) return this;
-            this.right = this.right.remove(comparator, key, getRemovedNode);
-            return this.balance();
-        } else {
-            getRemovedNode(this);
-            if (undefined === this.left) {
-                if (undefined === this.right) {
-                    // no successors
-                    return undefined;
-                } else {
-                    // right successor
-                    return this.right;
-                }
-            } else if (undefined === this.right) {
-                // left successor
-                return this.left;
+        let node = undefined as Node<K, V> | undefined;
+        this.root = this._deleteNode(this.root, key, (n) => {
+            if (condition(n)) {
+                node = n;
+                return true;
             } else {
-                // two possible successors
-                const successor = this.right.leftMostSubNode;
-                successor._left = this.left;
-                successor._right = this.right.remove(comparator, successor.key);
-                successor.update();
-                return successor.balance();
+                return false;
             }
+        });
+        return node;
+    }
+
+    private _deleteNode(
+        node: Node<K, V> | undefined,
+        key: K,
+        condition: (node: Node<K, V>) => boolean
+    ): Node<K, V> | undefined {
+        if (node === undefined) return undefined;
+        const cmp = this.comparator(key, node.key);
+        if (cmpLT(cmp)) {
+            node.left = this._deleteNode(node.left, key, condition);
+            node.update();
+            return node.balance();
+        } else if (cmpGT(cmp)) {
+            node.right = this._deleteNode(node.right, key, condition);
+            node.update();
+            return node.balance();
+        } else {
+            if (!condition(node)) return node;
+            let successor = undefined as Node<K, V> | undefined;
+
+            if (node.left !== undefined && node.right !== undefined) {
+                node.right = this._deleteSmallestNode(node.right, (n) => {
+                    successor = n;
+                    return true;
+                });
+                successor!.right = node.right;
+                successor!.left = node.left;
+                successor!.update();
+            } else if (node.right !== undefined) {
+                successor = node.right;
+            } else if (node.left !== undefined) {
+                successor = node.left;
+            }
+
+            node.emancipate();
+
+            return successor?.balance();
+        }
+    }
+
+    private deleteLargestNode(
+        condition: (node: Node<K, V>) => boolean = returns(true)
+    ): Node<K, V> | undefined {
+        let node = undefined as Node<K, V> | undefined;
+        this.root = this._deleteLargestNode(this.root, (n) => {
+            if (condition(n)) {
+                node = n;
+                return true;
+            } else {
+                return false;
+            }
+        });
+        return node;
+    }
+
+    private _deleteLargestNode(
+        node: Node<K, V> | undefined,
+        condition: (node: Node<K, V>) => boolean
+    ): Node<K, V> | undefined {
+        if (node === undefined) return undefined;
+        if (node.right !== undefined) {
+            node.right = this._deleteLargestNode(node.right, condition);
+            node.update();
+            return node.balance();
+        } else {
+            if (!condition(node)) return node;
+            const successor = node.left;
+            node.emancipate();
+            return successor;
+        }
+    }
+
+    private deleteSmallestNode(
+        condition: (node: Node<K, V>) => boolean = returns(true)
+    ): Node<K, V> | undefined {
+        let node = undefined as Node<K, V> | undefined;
+        this.root = this._deleteSmallestNode(this.root, (n) => {
+            if (condition(n)) {
+                node = n;
+                return true;
+            } else {
+                return false;
+            }
+        });
+        return node;
+    }
+
+    private _deleteSmallestNode(
+        node: Node<K, V> | undefined,
+        condition: (node: Node<K, V>) => boolean
+    ): Node<K, V> | undefined {
+        if (node === undefined) return undefined;
+        if (node.left !== undefined) {
+            node.left = this._deleteSmallestNode(node.left, condition);
+            node.update();
+            return node.balance();
+        } else {
+            if (!condition(node)) return node;
+            const successor = node.right;
+            node.emancipate();
+            return successor;
         }
     }
 }

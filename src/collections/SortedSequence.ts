@@ -1,4 +1,4 @@
-import { Order } from "../sorting";
+import { Order, autoComparator } from "../sorting";
 import Collection from "./Collection";
 import LinkedList from "./LinkedList";
 import SortedMap from "./SortedMap";
@@ -22,8 +22,11 @@ export default class SortedSequence<T> extends Collection<T> {
         this._size = value;
     }
 
+    /**
+     * @param order How to sort the values. Defaults to {@link autoComparator}.
+     */
     public constructor(
-        order: Order<T>,
+        order: Order<T> = autoComparator,
         sizeLimit?: {
             /** The maximum number of values to allow in the {@link SortedSequence}. */
             maxSize: number;
@@ -44,22 +47,16 @@ export default class SortedSequence<T> extends Collection<T> {
         const oversize =
             this.sizeLimit !== undefined && this.size >= this.sizeLimit.maxSize;
 
-        const entry = this.data.get(value);
+        const list = this.data.getOrCompute(value, () => new LinkedList<T>());
+        list.push(value);
 
-        if (entry === undefined) {
-            const newEntry = new LinkedList<T>();
-            newEntry.push(value);
-            this.data.set(value, newEntry);
-        } else {
-            entry.push(value);
-        }
         this.size++;
 
         if (oversize) {
             if (this.sizeLimit!.keep === "greatest") {
-                this.deleteLeast();
+                this.deleteSmallest();
             } else {
-                this.deleteGreatest();
+                this.deleteLargest();
             }
         }
     }
@@ -67,39 +64,37 @@ export default class SortedSequence<T> extends Collection<T> {
     /**
      * Deletes the greatest value from the sequence.
      */
-    public deleteGreatest(): boolean {
+    public deleteLargest(): boolean {
         if (this.isEmpty) return false;
 
-        const entry = this.data.getGreatestEntry()!;
-        entry[1].pop();
-        if (entry[1].isEmpty) {
-            this.data.deleteGreatest();
-        }
+        this.data.deleteLargest((entry) => {
+            entry.value.pop();
+            return entry.value.isEmpty;
+            // The key doesn't need to be replaced in this case because it's the first element that gets used as the key, which will be the last element removed from the end.
+        });
+
         this.size--;
         return true;
-
-        // The key doesn't need to be replaced in this case because it's the first element that gets used as the key, which will be the last element removed from the end.
     }
 
     /**
      * Deletes the least value from the sequence.
      */
-    public deleteLeast(): boolean {
+    public deleteSmallest(): boolean {
         if (this.isEmpty) return false;
 
-        const entry = this.data.getLeastEntry()!;
-        entry[1].shift();
-        if (entry[1].isEmpty) {
-            this.data.deleteLeast();
-        } else {
-            // Replace key with one that is definitely in the linked list so that the current key can be garbage collected.
-            // Because, if the current key is not in the linked list, the sorted map might be the only thing holding it.
+        this.data.deleteSmallest((entry) => {
+            entry.value.shift();
+            if (entry.value.isEmpty) {
+                return true;
+            } else {
+                // Replace key with one that is definitely in the linked list so that the current key can be garbage collected.
+                // Because, if the current key is not in the linked list, the sorted map might be the only thing holding it.
+                this.data.reKey(entry, entry.value.head!.value);
+                return false;
+            }
+        });
 
-            // TODO add some way to quickly change the entry's key without doing this
-            // this is 0(log(n)) time but it could be 0(1)
-            // probably going to re-write SortedMap
-            this.data.set(entry[1].head!.value, entry[1]);
-        }
         this.size--;
         return true;
     }

@@ -27,6 +27,48 @@ export function isComparator<T>(order: Order<T>): order is Comparator<T> {
 }
 
 /**
+ * @returns Whether the given {@link Comparator} result signifies a less than relationship.
+ */
+export function cmpLT(comparatorResult: number): boolean {
+    return comparatorResult < 0;
+}
+
+/**
+ * @returns Whether the given {@link Comparator} result signifies a greater than relationship.
+ */
+export function cmpGT(comparatorResult: number): boolean {
+    return comparatorResult > 0;
+}
+
+/**
+ * @returns Whether the given {@link Comparator} result signifies an equal to relationship.
+ */
+export function cmpEQ(comparatorResult: number): boolean {
+    return !(comparatorResult < 0 || comparatorResult > 0);
+}
+
+/**
+ * @returns Whether the given {@link Comparator} result signifies a not equal to relationship.
+ */
+export function cmpNQ(comparatorResult: number): boolean {
+    return comparatorResult < 0 || comparatorResult > 0;
+}
+
+/**
+ * @returns Whether the given {@link Comparator} result signifies a less than or equal to relationship.
+ */
+export function cmpLE(comparatorResult: number): boolean {
+    return comparatorResult < 0 || !(comparatorResult > 0);
+}
+
+/**
+ * @returns Whether the given {@link Comparator} result signifies a greater than or equal to relationship.
+ */
+export function cmpGE(comparatorResult: number): boolean {
+    return comparatorResult > 0 || !(comparatorResult < 0);
+}
+
+/**
  * @returns Whether the given {@link Order} is represented by a {@link FieldSelector}.
  */
 export function isFieldSelector<T>(order: Order<T>): order is FieldSelector<T> {
