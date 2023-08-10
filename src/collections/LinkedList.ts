@@ -315,6 +315,19 @@ export default class LinkedList<T> extends Collection<T> {
     }
 
     /**
+     * Replaces the value in the node with the given newValue as long as the node belongs to this list.
+     *
+     * @returns Whether the value was set.
+     */
+    public setValue(node: LinkedListNode<T>, newValue: T): boolean {
+        const _node = node as Node<T>;
+        if (_node.list !== this) return false;
+
+        _node.value = newValue;
+        return true;
+    }
+
+    /**
      * Removes the given {@link LinkedListNode} from the {@link LinkedList} and returns its value.
      * @param node The node to delete or the index of the node. Time complexity is O(index) if given an index.
      * @returns The removed element or undefined if the given node or index wasn't in the {@link LinkedList }.

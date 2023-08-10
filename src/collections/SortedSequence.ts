@@ -90,7 +90,7 @@ export default class SortedSequence<T> extends Collection<T> {
             } else {
                 // Replace key with one that is definitely in the linked list so that the current key can be garbage collected.
                 // Because, if the current key is not in the linked list, the sorted map might be the only thing holding it.
-                this.data.reKey(entry, entry.value.head!.value);
+                this.data.setKey(entry, entry.value.head!.value);
                 return false;
             }
         });

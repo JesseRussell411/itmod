@@ -9,6 +9,7 @@ import {
     cmpLE,
     cmpLT,
     cmpNQ,
+    reverseComparator,
 } from "../sorting";
 import { MapEntry } from "../types/MapEntry";
 import Collection from "./Collection";
@@ -103,7 +104,6 @@ class Node<K, V> implements SortedMapEntry<K, V> {
     private calcNodeCount(): number {
         return (this.left?.nodeCount ?? 0) + (this.right?.nodeCount ?? 0) + 1;
     }
-
     private calcBalanceFactor(): number {
         return (this.right?.depth ?? 0) - (this.left?.depth ?? 0);
     }
@@ -185,8 +185,17 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
         return this.root?.nodeCount ?? 0;
     }
 
-    public [Symbol.iterator]() {
+    public [Symbol.iterator](): Iterator<SortedMapEntry<K, V>> {
         return this._iterator(this.root);
+    }
+
+    /**
+     * @returns An {@link Iterable} over the entries in reverse order.
+     */
+    public reversed(): Iterable<SortedMapEntry<K, V>> {
+        return {
+            [Symbol.iterator]: () => this._iteratorReversed(this.root),
+        };
     }
 
     private *_iterator(node: Node<K, V> | undefined): Generator<Node<K, V>> {
@@ -194,6 +203,15 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
         yield* this._iterator(node.left);
         yield node;
         yield* this._iterator(node.right);
+    }
+
+    private *_iteratorReversed(
+        node: Node<K, V> | undefined
+    ): Generator<Node<K, V>> {
+        if (node === undefined) return;
+        yield* this._iteratorReversed(node.right);
+        yield node;
+        yield* this._iteratorReversed(node.left);
     }
 
     /**
@@ -295,7 +313,7 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
      *
      * @returns Whether the key was replaced.
      */
-    public reKey(entry: SortedMapEntry<K, V>, newKey: K): boolean {
+    public setKey(entry: SortedMapEntry<K, V>, newKey: K): boolean {
         const node = entry as Node<K, V>;
 
         // does the entry belong to this map?
@@ -313,7 +331,7 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
      *
      * @returns Whether the value was replaced.
      */
-    public reValue(entry: SortedMapEntry<K, V>, newValue: V): boolean {
+    public setValue(entry: SortedMapEntry<K, V>, newValue: V): boolean {
         const node = entry as Node<K, V>;
 
         // does the entry belong to this map?
@@ -360,7 +378,13 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
             key: K,
             /** Whether the min value is inclusive or exclusive. Defaults to inclusive. */
             type?: "inclusive" | "exclusive"
-        ]
+        ],
+        {
+            reversed = false,
+        }: {
+            /** Whether to iterate in reverse order. Defaults to false. */
+            reversed?: boolean;
+        } = {}
     ): Iterable<SortedMapEntry<K, V>> {
         const self = this;
         function* recur(node: Node<K, V> | undefined): Generator<Node<K, V>> {
@@ -380,9 +404,15 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
                 }
             }
 
-            yield* recur(node.left);
-            yield node;
-            yield* recur(node.right);
+            if (reversed) {
+                yield* recur(node.right);
+                yield node;
+                yield* recur(node.left);
+            } else {
+                yield* recur(node.left);
+                yield node;
+                yield* recur(node.right);
+            }
         }
 
         return {
@@ -390,6 +420,40 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
                 return recur(self.root);
             },
         };
+    }
+
+    /**
+     * Deletes all entries from the map.
+     */
+    public clear() {
+        this._emancipateAllNodes(this.root);
+        this.root = undefined;
+    }
+
+    /**
+     * Reverses the order of the map.
+     */
+    public reverse(): void {
+        this._invert(this.root);
+        this.comparator = reverseComparator(this.comparator);
+    }
+
+    private _emancipateAllNodes(node: Node<K, V> | undefined): void {
+        if (node === undefined) return;
+        this._emancipateAllNodes(node.left);
+        this._emancipateAllNodes(node.right);
+        node.emancipate();
+    }
+
+    private _invert(node: Node<K, V> | undefined): void {
+        if (node === undefined) return;
+
+        this._invert(node.left);
+        this._invert(node.right);
+
+        const left = node.left;
+        node.left = node.right;
+        node.right = left;
     }
 
     private getNode(key: K): Node<K, V> | undefined {

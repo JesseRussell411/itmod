@@ -253,6 +253,32 @@ export const autoComparator: Comparator<unknown> = (
  * Reverses the given order so that, in comparator form, a positive number is returned when a negative number would have been and vice versa.
  */
 export function reverseOrder<T>(order: Order<T>): Order<T> {
+    if (order instanceof Object) {
+        const fromCache = reversedOrderCache.get(order);
+        if (fromCache !== undefined) return fromCache as any;
+    }
+
     const comparator = asComparator(order);
-    return (a: T, b: T) => comparator(b, a);
+
+    const reversed = (a: T, b: T) => comparator(b, a);
+    // store original in cache so that the order can be efficiently un-reversed later
+    reversedOrderCache.set(reversed, order);
+    return reversed;
 }
+
+const reversedOrderCache = new WeakMap<Order<any> & object, Order<any>>();
+
+/**
+ * Reverses the given comparator so that a positive number is returned when a negative number would have been and vice versa.
+ */
+export function reverseComparator<T>(comparator: Comparator<T>): Comparator<T> {
+    const fromCache = reversedComparatorCache.get(comparator);
+    if (fromCache !== undefined) return fromCache;
+
+    const reversed = (a: T, b: T) => comparator(b, a);
+    // store original in cache so that the comparator can be efficiently un-reversed later
+    reversedComparatorCache.set(reversed, comparator);
+    return reversed;
+}
+
+const reversedComparatorCache = new WeakMap<Comparator<any>, Comparator<any>>();
