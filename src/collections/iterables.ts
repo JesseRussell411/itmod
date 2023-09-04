@@ -104,18 +104,49 @@ export function range(
 }
 
 /**
+ * @returns An iterable with no items.
+ */
+export function emptyIterable<T>(): Iterable<T> {
+    return _emptyIterable;
+}
+
+const _emptyIterable: Iterable<any> = {
+    get [Symbol.iterator]() {
+        return emptyIterator;
+    },
+};
+
+/**
  * @returns An iterator with no items.
  */
 export function emptyIterator<T>(): Iterator<T> {
-    return {
-        next() {
-            return {
-                done: true,
-                value: undefined,
-            };
-        },
-    };
+    return _emptyIterator;
 }
+
+const _emptyIterator: Iterator<any> = {
+    // this is so that no one can replace the next method
+    get next() {
+        return doneIteratorResultResult;
+    },
+};
+
+/**
+ * @returns The result of a complete iterator.
+ */
+export function doneIteratorResultResult<T>(): IteratorResult<T> & {
+    done: true;
+} {
+    return _doneIteratorResult;
+}
+
+const _doneIteratorResult = {
+    get done(): true {
+        return true;
+    },
+    get value(): undefined {
+        return undefined;
+    },
+};
 
 /**
  * Caches the given {@link Iterable} so that multiple iterations of the returned {@link Iterable} only iterate the original once.

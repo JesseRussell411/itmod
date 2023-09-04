@@ -1,8 +1,8 @@
 /**
  * The general form of the given literal type.
- * @example `General<4>` ==> number
- * `General<"foobar">` ==> string
- * `General<3n>` ==> bigint
+ * @example General<4> === number
+ * General<"foobar"> === string
+ * General<3n> === bigint
  */
 export type General<T> = T extends string
     ? string

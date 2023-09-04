@@ -1,6 +1,3 @@
-export type MapEntry<Key, Value> = {
-    /** Key. */
-    readonly [0]: Key;
-    /** Value. */
-    readonly [1]: Value;
-};
+type MapEntry<Key, Value> = { 0: Key; 1: Value } & Iterable<Key | Value>;
+
+export default MapEntry;

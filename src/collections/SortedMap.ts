@@ -1,4 +1,4 @@
-import { returns } from "../functional";
+import { returns } from "../functional/functions";
 import {
     Comparator,
     Order,
@@ -11,43 +11,45 @@ import {
     cmpNQ,
     reverseComparator,
 } from "../sorting";
-import { MapEntry } from "../types/MapEntry";
+import MapEntry from "../types/MapEntry";
 import Collection from "./Collection";
 
 export interface SortedMapEntry<K, V> extends MapEntry<K, V> {
     readonly key: K;
     readonly value: V;
     /** The map that this entry belongs to. Undefined if the entry has been deleted. */
-    readonly map?: SortedMap<K, V>;
+    readonly sortedMap?: SortedMap<K, V>;
 }
 
-class Node<K, V> implements SortedMapEntry<K, V> {
-    public key: K;
-    // @ts-ignore
-    private _value: V;
-    public map?: SortedMap<K, V>;
+class Node<K, V> extends Array<K | V> implements SortedMapEntry<K, V> {
+    public [0]: K;
+    public [1]: V;
+    public sortedMap?: SortedMap<K, V>;
     public depth: number;
     public nodeCount: number;
     public balanceFactor: number;
     private _left?: Node<K, V>;
     private _right?: Node<K, V>;
 
+    public get key(): K {
+        return this[0];
+    }
+    public set key(value: K) {
+        this[0] = value;
+    }
+
     public get value(): V {
-        return this._value;
+        return this[1];
     }
     public set value(value: V) {
-        if (value === undefined) {
-            //@ts-ignore
-            delete this._value;
-        } else {
-            this._value = value;
-        }
+        this[1] = value;
     }
 
     public get left(): Node<K, V> | undefined {
         return this._left;
     }
     public set left(value: Node<K, V> | undefined) {
+        // TODO do some benchmarks and find out if this actually helps memory usage
         if (value === undefined) {
             delete this._left;
         } else {
@@ -69,13 +71,14 @@ class Node<K, V> implements SortedMapEntry<K, V> {
     public constructor(
         key: K,
         value: V,
-        map: SortedMap<K, V>,
+        sortedMap: SortedMap<K, V>,
         left?: Node<K, V>,
         right?: Node<K, V>
     ) {
-        this.key = key;
-        this.value = value;
-        this.map = map;
+        super(2);
+        this[0] = key;
+        this[1] = value;
+        this.sortedMap = sortedMap;
         this.left = left;
         this.right = right;
 
@@ -84,12 +87,9 @@ class Node<K, V> implements SortedMapEntry<K, V> {
         this.balanceFactor = this.calcBalanceFactor();
     }
 
-    public get [0](): K {
-        return this.key;
-    }
-
-    public get [1](): V {
-        return this.value;
+    public *[Symbol.iterator]() {
+        yield this.key;
+        yield this.value;
     }
 
     public update() {
@@ -108,9 +108,14 @@ class Node<K, V> implements SortedMapEntry<K, V> {
         return (this.right?.depth ?? 0) - (this.left?.depth ?? 0);
     }
 
+    public updateBalanceFactor(): void {
+        this.balanceFactor = this.calcBalanceFactor();
+    }
+
     /**
      * Performs a left rotation. Assumes that {@link right} is not undefined.
      * @returns The node to replace this one with.
+     * @throws If {@link right} is undefined.
      */
     public rotateLeft(): Node<K, V> {
         const right = this.right;
@@ -124,6 +129,7 @@ class Node<K, V> implements SortedMapEntry<K, V> {
     /**
      * Performs a right rotation. Assumes that {@link left} is not undefined.
      * @returns The node to replace this one with.
+     * @throws If {@link left} is undefined.
      */
     public rotateRight(): Node<K, V> {
         const left = this.left;
@@ -152,7 +158,7 @@ class Node<K, V> implements SortedMapEntry<K, V> {
      * Cuts all ties to the parent map.
      */
     public emancipate(): void {
-        delete this.map;
+        delete this.sortedMap;
         delete this.left;
         delete this.right;
     }
@@ -317,7 +323,7 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
         const node = entry as Node<K, V>;
 
         // does the entry belong to this map?
-        if (node.map !== this) return false;
+        if (node.sortedMap !== this) return false;
         // do the keys match?
         if (cmpNQ(this.comparator(newKey, node.key))) return false;
 
@@ -327,7 +333,7 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
     }
 
     /**
-     * Replaces the value in the given entry with the given new value as long as one condition is met: the entry belongs to this map.
+     * Replaces the value in the given entry with the given new value as long as the entry belongs to this map.
      *
      * @returns Whether the value was replaced.
      */
@@ -335,7 +341,7 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
         const node = entry as Node<K, V>;
 
         // does the entry belong to this map?
-        if (node.map !== this) return false;
+        if (node.sortedMap !== this) return false;
 
         // conditions are met
         node.value = newValue;
@@ -426,7 +432,7 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
      * Deletes all entries from the map.
      */
     public clear() {
-        this._emancipateAllNodes(this.root);
+        this.emancipateAllNodes();
         this.root = undefined;
     }
 
@@ -434,10 +440,13 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
      * Reverses the order of the map.
      */
     public reverse(): void {
-        this._invert(this.root);
+        this.invert();
         this.comparator = reverseComparator(this.comparator);
     }
 
+    private emancipateAllNodes(): void {
+        return this._emancipateAllNodes(this.root);
+    }
     private _emancipateAllNodes(node: Node<K, V> | undefined): void {
         if (node === undefined) return;
         this._emancipateAllNodes(node.left);
@@ -445,6 +454,9 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
         node.emancipate();
     }
 
+    private invert(): void {
+        return this._invert(this.root);
+    }
     private _invert(node: Node<K, V> | undefined): void {
         if (node === undefined) return;
 
@@ -454,6 +466,7 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
         const left = node.left;
         node.left = node.right;
         node.right = left;
+        node.updateBalanceFactor();
     }
 
     private getNode(key: K): Node<K, V> | undefined {

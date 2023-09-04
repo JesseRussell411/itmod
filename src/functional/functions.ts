@@ -8,7 +8,7 @@ export function resultOf<T>(itemOrGetter: T | (() => T)): T {
 }
 
 /** Does nothing. */
-export function doNothing(... _args:any[]): void {
+export function doNothing(..._args: any[]): void {
     // doing nothing...
 }
 
@@ -22,15 +22,15 @@ export function returns<T>(item: T): () => T {
     return () => item;
 }
 
-/** @throws The given {@link Error}. */
+/** @throws The given error. */
 export function throwError<E>(error: E): void {
     throw error;
 }
 
-/** @throws The {@link Error} of type E. */
-type ThrowError<E> = () => void;
+/** @throws The error of type E. */
+export type ThrowError<E> = () => void;
 
-/** @returns A function that throws the given {@link Error}. */
+/** @returns A function that throws the given error. */
 export function throws<E>(error: E): ThrowError<E> {
     return () => {
         throw error;

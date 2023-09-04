@@ -8,12 +8,13 @@ import {
 } from "./collections/is";
 import {
     cachingIterable as cachedIterable,
+    emptyIterable,
     range,
 } from "./collections/iterables";
 import { toArray, toSet } from "./collections/to";
 import NeverEndingOperationError from "./errors/NeverEndingOperationError";
 import NotImplementedError from "./errors/NotImplementedError";
-import { identity, resultOf, returns } from "./functional";
+import { identity, resultOf, returns } from "./functional/functions";
 import {
     requireIntegerOrInfinity,
     requireNonNegative,
@@ -33,6 +34,7 @@ import {
     min,
     nonIteratedCountOrUndefined,
 } from "./transformations/iterable";
+import MapEntryLike from "./types/MapEntryLike";
 import { General } from "./types/literals";
 
 // TODO unit tests
@@ -49,8 +51,7 @@ import { General } from "./types/literals";
 
 // TODO unit tests
 
-// TODO sequenceEqual
-// TODO join, leftjoin, groupjoin
+// TODO groupby join, leftjoin, groupjoin
 export type Comparison =
     | "equals"
     | "lessThan"
@@ -77,7 +78,7 @@ export type ItmodProperties<_> = Readonly<
 >;
 
 /**
- * Functional wrapper for {@link Iterable}. Provides tranformation functions such as {@link Itmod.map}, {@link Itmod.filter}, {@link Itmod.reduce}, and {@link Itmod.fold};
+ * Functional wrapper for {@link Iterable}. Provides transformation functions such as {@link Itmod.map}, {@link Itmod.filter}, {@link Itmod.reduce}, and {@link Itmod.fold};
  */
 export default class Itmod<T> implements Iterable<T> {
     /**
@@ -132,6 +133,13 @@ export default class Itmod<T> implements Iterable<T> {
      */
     public static of<T>(...items: readonly T[]): Itmod<T> {
         return new Itmod({}, () => items);
+    }
+
+    /**
+     * @returns An empty {@link Itmod} of the given type.
+     */
+    public static empty<T>(): Itmod<T> {
+        return _emptyItmod;
     }
 
     // TODO don't take non enumerable properties, like what Object.entries does
@@ -536,14 +544,17 @@ export default class Itmod<T> implements Iterable<T> {
         const self = this;
         return function repeat(times: number | bigint): Itmod<T> {
             requireIntegerOrInfinity(times);
+            if (times === 0) return Itmod.of();
             if (times < 0) {
                 return self.reverse().repeat(-times);
             }
 
+            // source is infinite
             if (self.properties.infinite) {
                 return self;
             }
 
+            // repeat infinite times
             if (times === Infinity) {
                 return new Itmod({ infinite: true }, function* () {
                     const source = self.getSource();
@@ -709,6 +720,48 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    public get groupBy(): {
+        <K>(keySelector: (item: T, index: number) => K): Itmod<
+            [key: K, group: T[]]
+        >;
+        <K, G>(
+            keySelector: (item: T, index: number) => K,
+            groupSelector: (group: T[]) => G
+        ): Itmod<[key: K, group: G]>;
+    } {
+        const self = this;
+        return function groupBy<K>(
+            keySelector: (item: T, index: number) => K,
+            groupSelector?: (group: T[]) => any
+        ): Itmod<[key: K, group: any]> {
+            return new Itmod({ expensive: true, fresh: true }, () => {
+                const groups = new Map<K, any>();
+
+                let i = 0;
+
+                for (const item of self) {
+                    const key = keySelector(item, i);
+                    const group = groups.get(key) as T[];
+                    if (group !== undefined) {
+                        group.push(item);
+                    } else {
+                        groups.set(key, [item]);
+                    }
+                    i++;
+                }
+
+                if (groupSelector !== undefined) {
+                    for (const entry of groups) {
+                        const group = groupSelector(entry[1]);
+                        groups.set(entry[0], group);
+                    }
+                }
+
+                return groups;
+            });
+        };
+    }
+
     /**
      * Copies all the items into an {@link Array}.
      */
@@ -741,6 +794,46 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    public get toMap(): {
+        (): T extends MapEntryLike<infer K, infer V>
+            ? Map<K, V>
+            : Map<unknown, unknown>;
+        <K>(
+            keySelector: (item: T, index: number) => K,
+            valueSelector?: undefined
+        ): T extends MapEntryLike<any, infer V> ? Map<K, V> : Map<K, unknown>;
+        <V>(
+            keySelector: undefined,
+            valueSelector: (item: T, index: number) => V
+        ): T extends MapEntryLike<infer K, any> ? Map<K, V> : Map<unknown, V>;
+        <K, V>(
+            keySelector: (item: T, index: number) => K,
+            valueSelector: (item: T, index: number) => V
+        ): Map<K, V>;
+    } {
+        const self = this;
+        return function toMap(
+            keySelector: (item: T, index: number) => any = (item: any) =>
+                item?.[0],
+            valueSelector: (item: T, index: number) => any = (item: any) =>
+                item?.[1]
+        ): any {
+            const result = new Map<any, any>();
+
+            let i = 0;
+            for (const item of self) {
+                const key = keySelector(item, i);
+                const value = valueSelector(item, i);
+
+                result.set(key, value);
+
+                i++;
+            }
+
+            return result;
+        };
+    }
+
     /**
      * If the {@link Iterable} is an {@link Array}, returns that {@link Set} as readonly; otherwise, copies all the items into an {@link Array} and returns that.
      */
@@ -765,6 +858,38 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    public get asMap(): {
+        (): T extends MapEntryLike<infer K, infer V>
+            ? ReadonlyMap<K, V>
+            : ReadonlyMap<unknown, unknown>;
+        <K>(
+            keySelector: (item: T, index: number) => K,
+            valueSelector?: undefined
+        ): T extends MapEntryLike<any, infer V>
+            ? ReadonlyMap<K, V>
+            : ReadonlyMap<K, unknown>;
+        <V>(
+            keySelector: undefined,
+            valueSelector: (item: T, index: number) => V
+        ): T extends MapEntryLike<infer K, any>
+            ? ReadonlyMap<K, V>
+            : ReadonlyMap<unknown, V>;
+        <K, V>(
+            keySelector: (item: T, index: number) => K,
+            valueSelector: (item: T, index: number) => V
+        ): ReadonlyMap<K, V>;
+    } {
+        const self = this;
+        return function asMap(
+            keySelector: (item: T, index: number) => any = (item: any) =>
+                item?.[0],
+            valueSelector: (item: T, index: number) => any = (item: any) =>
+                item?.[1]
+        ): any {
+            return self.toMap(keySelector, valueSelector);
+        };
+    }
+
     /**
      * Sorts the items.
      * @param orders How to sort the items. Defaults to {@link autoComparator}.
@@ -777,6 +902,49 @@ export default class Itmod<T> implements Iterable<T> {
                 self.getSource,
                 orders.length === 0 ? [autoComparator] : orders
             );
+        };
+    }
+
+    /**
+     * Checks if the given Iterable contains the same items in the same order as the {@link Itmod}.
+     *
+     * @param other The given Iterable.
+     * @param is Returns whether the two given items are considered equal.
+     *
+     */
+    public get sequenceEquals() {
+        const self = this;
+        return function sequenceEquals<O = T>(
+            other: Iterable<O>,
+            /**
+             * @default Object.is
+             */
+            is: (a: T, b: O) => boolean = (a, b) => Object.is(a, b)
+        ) {
+            const source = self.getSource();
+
+            // try to check size
+            const aSize = nonIteratedCountOrUndefined(source);
+            if (aSize !== undefined) {
+                const bSize = nonIteratedCountOrUndefined(other);
+                if (bSize !== undefined && aSize !== bSize) return false;
+            }
+
+            // check contents
+            const aIterator = self[Symbol.iterator]();
+            const bIterator = other[Symbol.iterator]();
+
+            while (true) {
+                const aNext = aIterator.next();
+                const bNext = bIterator.next();
+
+                const aDone = aNext.done;
+                const bDone = bNext.done;
+                // if done, return whether both are done, which means they have the same length. If they don't have the same length, they're not equal
+                if (aDone || bDone) return aDone === bDone;
+
+                if (!is(aNext.value, bNext.value)) return false;
+            }
         };
     }
 
@@ -995,6 +1163,8 @@ export class SortedItmod<T> extends Itmod<T> {
         };
     }
 }
+
+const _emptyItmod = new Itmod<any>({}, returns(emptyIterable()));
 
 function take<T>(count: number | bigint, source: Iterable<T>): Iterable<T> {
     requireIntegerOrInfinity(requireNonNegative(count));

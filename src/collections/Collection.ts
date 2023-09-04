@@ -17,6 +17,13 @@ export default abstract class Collection<T> implements Iterable<T> {
     }
 
     /**
+     * @returns The {@link Collection}'s contents copied into an {@link Array}.
+     */
+    public toArray(): T[] {
+        return [...this];
+    }
+
+    /**
      * Convert the signed index to an unsigned index.
      */
     protected static loopSignedIndex(bounds: number, index: number): number {
@@ -40,12 +47,5 @@ export default abstract class Collection<T> implements Iterable<T> {
         } else {
             return index < bounds;
         }
-    }
-
-    /**
-     * @returns The {@link Collection}'s contents copied into an {@link Array}.
-     */
-    public toArray(): T[] {
-        return [...this];
     }
 }

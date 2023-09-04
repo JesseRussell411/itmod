@@ -1,5 +1,6 @@
 import Itmod from "../Itmod";
 import CircularBuffer from "../collections/CircularBuffer";
+import Collection from "../collections/Collection";
 import SortedMap from "../collections/SortedMap";
 import SortedSequence from "../collections/SortedSequence";
 import { Order, autoComparator } from "../sorting";
@@ -16,9 +17,7 @@ export function nonIteratedCountOrUndefined(
     if (
         iterable instanceof Set ||
         iterable instanceof Map ||
-        iterable instanceof SortedMap ||
-        iterable instanceof SortedSequence ||
-        iterable instanceof CircularBuffer
+        iterable instanceof Collection
     ) {
         return iterable.size;
     }

@@ -11,9 +11,10 @@ export interface LinkedListNode<T> {
     /** This {@link LinkedListNode}'s value. */
     readonly value: T;
     /** The {@link LinkedList} that this {@link LinkedListNode} belongs to. */
-    readonly list?: LinkedList<T>;
+    readonly linkedList?: LinkedList<T>;
 }
 
+/** private, writable node type */
 interface Node<T> extends Writable<LinkedListNode<T>> {
     next?: Node<T>;
     previous?: Node<T>;
@@ -36,7 +37,7 @@ export default class LinkedList<T> extends Collection<T> {
         }
     }
 
-    /** The node at index 0. */
+    /** The node at index 0. The first node. */
     public get head(): LinkedListNode<T> | undefined {
         return this._head;
     }
@@ -166,7 +167,7 @@ export default class LinkedList<T> extends Collection<T> {
      * @returns The {@link LinkedListNode} that was inserted.
      */
     public push(value: T): LinkedListNode<T> {
-        const newNode: Node<T> = { value, list: this };
+        const newNode: Node<T> = { value, linkedList: this };
         if (this.isEmpty) {
             this._head = newNode;
             this._tail = newNode;
@@ -187,7 +188,7 @@ export default class LinkedList<T> extends Collection<T> {
      * @returns The {@link LinkedListNode} that was inserted.
      */
     public unshift(value: T): LinkedListNode<T> {
-        const newNode: Node<T> = { value, list: this };
+        const newNode: Node<T> = { value, linkedList: this };
         if (this.isEmpty) {
             this._head = newNode;
             this._tail = newNode;
@@ -221,7 +222,7 @@ export default class LinkedList<T> extends Collection<T> {
 
         delete node.next;
         delete node.previous;
-        delete node.list;
+        delete node.linkedList;
 
         this.size--;
 
@@ -247,7 +248,7 @@ export default class LinkedList<T> extends Collection<T> {
 
         delete node.next;
         delete node.previous;
-        delete node.list;
+        delete node.linkedList;
 
         this.size--;
 
@@ -275,37 +276,41 @@ export default class LinkedList<T> extends Collection<T> {
         }
 
         let _node: Node<T> = node;
-        if (_node.list !== this) return undefined;
+        if (_node.linkedList !== this) return undefined;
 
         if (orientation === "before") {
+            // if first node, unshift
             if (_node === this._head) {
                 return this.unshift(value);
             }
-            const newNode: Node<T> = { value, list: this };
+            const newNode: Node<T> = { value, linkedList: this, next: _node};
 
-            newNode.next = _node;
             if (_node.previous !== undefined) {
+                // if existing node already have a node before it, switch links to connect new node to it so that it is before new node
                 newNode.previous = _node.previous;
                 _node.previous.next = newNode;
             }
 
+            // set new node to go before existing node
             _node.previous = newNode;
 
             this.size++;
 
             return newNode;
         } else {
+            // if last node, push
             if (_node === this._tail) {
                 return this.push(value);
             }
-            const newNode: Node<T> = { value, list: this };
+            const newNode: Node<T> = { value, linkedList: this, previous: _node };
 
-            newNode.previous = _node;
             if (_node.next !== undefined) {
+                // if existing node already have a node after it, switch links to connect new node to it so that it is after new node
                 newNode.next = _node.next;
                 _node.next.previous = newNode;
             }
 
+            // set new node to go after existing node
             _node.next = newNode;
 
             this.size++;
@@ -321,7 +326,7 @@ export default class LinkedList<T> extends Collection<T> {
      */
     public setValue(node: LinkedListNode<T>, newValue: T): boolean {
         const _node = node as Node<T>;
-        if (_node.list !== this) return false;
+        if (_node.linkedList !== this) return false;
 
         _node.value = newValue;
         return true;
@@ -333,35 +338,49 @@ export default class LinkedList<T> extends Collection<T> {
      * @returns The removed element or undefined if the given node or index wasn't in the {@link LinkedList }.
      */
     public delete(node: LinkedListNode<T> | number): T | undefined {
+        // handle index
         if (typeof node === "number") {
             const nodeAtIndex = this.nodeAt(node);
             if (nodeAtIndex === undefined) return undefined;
             return this.delete(nodeAtIndex);
         }
 
+        // cast to private Node class
         let _node: Node<T> = node;
-        if (_node.list !== this) return undefined;
+        // does the node belong to this list?
+        if (_node.linkedList !== this) return undefined;
 
         if (this.size === 1) {
+            // only one node in list
+            // node is both head and tail. remove both
             delete this._head;
             delete this._tail;
         } else if (_node === this._head) {
+            // node is head. remove head and replace it with next
+            // remove previous node from next node
+            delete _node.next!.previous;
             this._head = _node.next!;
-            delete this._head.previous;
         } else if (_node === this._tail) {
+            // node is tail. remove tail and replace with previous
+            // remove next node from previous node
+            delete _node.previous!.next;
             this._tail = _node.previous!;
-            delete this._tail.next;
         } else {
+            // node is middle of list somewhere
+            // set links from previous and next nodes to reach "over" the node
             _node.previous!.next = _node.next;
             _node.next!.previous = _node.previous;
         }
 
+        // emancipate the deleted node, cut all ties to the list
         delete _node.next;
         delete _node.previous;
-        delete _node.list;
+        delete _node.linkedList;
 
+        // decrement size because one node gone now
         this.size--;
 
+        // return deleted value
         return _node.value;
     }
 
@@ -373,7 +392,7 @@ export default class LinkedList<T> extends Collection<T> {
         while (current !== undefined) {
             delete current.next;
             delete current.previous;
-            delete current.list;
+            delete current.linkedList;
             current = current.next;
         }
 

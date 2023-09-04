@@ -1,6 +1,6 @@
 /**
  * Ensures that the number is not {@link NaN}.
- * **note** Every other function in this file implicitly calls this one.
+ * **note** Every other number-related function in this file implicitly includes this one.
  * @throws If the number is {@link NaN}.
  */
 export function requireNonNaN<N extends number | bigint>(number: N): N {

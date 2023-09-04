@@ -27,48 +27,6 @@ export function isComparator<T>(order: Order<T>): order is Comparator<T> {
 }
 
 /**
- * @returns Whether the given {@link Comparator} result signifies a less than relationship.
- */
-export function cmpLT(comparatorResult: number): boolean {
-    return comparatorResult < 0;
-}
-
-/**
- * @returns Whether the given {@link Comparator} result signifies a greater than relationship.
- */
-export function cmpGT(comparatorResult: number): boolean {
-    return comparatorResult > 0;
-}
-
-/**
- * @returns Whether the given {@link Comparator} result signifies an equal to relationship.
- */
-export function cmpEQ(comparatorResult: number): boolean {
-    return !(comparatorResult < 0 || comparatorResult > 0);
-}
-
-/**
- * @returns Whether the given {@link Comparator} result signifies a not equal to relationship.
- */
-export function cmpNQ(comparatorResult: number): boolean {
-    return comparatorResult < 0 || comparatorResult > 0;
-}
-
-/**
- * @returns Whether the given {@link Comparator} result signifies a less than or equal to relationship.
- */
-export function cmpLE(comparatorResult: number): boolean {
-    return comparatorResult < 0 || !(comparatorResult > 0);
-}
-
-/**
- * @returns Whether the given {@link Comparator} result signifies a greater than or equal to relationship.
- */
-export function cmpGE(comparatorResult: number): boolean {
-    return comparatorResult > 0 || !(comparatorResult < 0);
-}
-
-/**
  * @returns Whether the given {@link Order} is represented by a {@link FieldSelector}.
  */
 export function isFieldSelector<T>(order: Order<T>): order is FieldSelector<T> {
@@ -80,6 +38,48 @@ export function isFieldSelector<T>(order: Order<T>): order is FieldSelector<T> {
  */
 export function isField<T>(order: Order<T>): order is Field<T> {
     return !(order instanceof Function);
+}
+
+/**
+ * @returns Whether the given {@link Comparator} result signifies a "less than" relationship.
+ */
+export function cmpLT(comparatorResult: number): boolean {
+    return comparatorResult < 0;
+}
+
+/**
+ * @returns Whether the given {@link Comparator} result signifies a "greater than" relationship.
+ */
+export function cmpGT(comparatorResult: number): boolean {
+    return comparatorResult > 0;
+}
+
+/**
+ * @returns Whether the given {@link Comparator} result signifies an "equal to" relationship.
+ */
+export function cmpEQ(comparatorResult: number): boolean {
+    return !(comparatorResult < 0 || comparatorResult > 0);
+}
+
+/**
+ * @returns Whether the given {@link Comparator} result signifies a "not equal to" relationship.
+ */
+export function cmpNQ(comparatorResult: number): boolean {
+    return comparatorResult < 0 || comparatorResult > 0;
+}
+
+/**
+ * @returns Whether the given {@link Comparator} result signifies a "less than or equal to" relationship.
+ */
+export function cmpLE(comparatorResult: number): boolean {
+    return comparatorResult < 0 || !(comparatorResult > 0);
+}
+
+/**
+ * @returns Whether the given {@link Comparator} result signifies a "greater than or equal to" relationship.
+ */
+export function cmpGE(comparatorResult: number): boolean {
+    return comparatorResult > 0 || !(comparatorResult < 0);
 }
 
 /**
@@ -253,6 +253,7 @@ export const autoComparator: Comparator<unknown> = (
  * Reverses the given order so that, in comparator form, a positive number is returned when a negative number would have been and vice versa.
  */
 export function reverseOrder<T>(order: Order<T>): Order<T> {
+    // check cache
     if (order instanceof Object) {
         const fromCache = reversedOrderCache.get(order);
         if (fromCache !== undefined) return fromCache as any;
@@ -272,12 +273,15 @@ const reversedOrderCache = new WeakMap<Order<any> & object, Order<any>>();
  * Reverses the given comparator so that a positive number is returned when a negative number would have been and vice versa.
  */
 export function reverseComparator<T>(comparator: Comparator<T>): Comparator<T> {
+    // check cache
     const fromCache = reversedComparatorCache.get(comparator);
     if (fromCache !== undefined) return fromCache;
 
     const reversed = (a: T, b: T) => comparator(b, a);
     // store original in cache so that the comparator can be efficiently un-reversed later
     reversedComparatorCache.set(reversed, comparator);
+    // don't do this: cache.set(comparator, reversed); because that would create a circular link island in the weakmap and a memory leak
+
     return reversed;
 }
 
