@@ -1,6 +1,11 @@
 import { requireNonNegative, requireSafeInteger } from "../require";
 import Collection from "./Collection";
 
+/**
+ * Buffer of limited size that can shift, unshift, push, and pop elements equally efficiently. Elements can be added until the maximum size is reached; whereupon, elements on the opposite side of the buffer are removed to make room.
+ *
+ * Note that an {@link Array} is allocated at creation that is equal in size to the maxSize.
+ */
 export default class CircularBuffer<T> extends Collection<T> {
     private data: (T | undefined)[];
     private offset: number;
@@ -132,6 +137,7 @@ export default class CircularBuffer<T> extends Collection<T> {
      * Appends the value to the end of the buffer, removing the first element if the buffer is full.
      */
     public push(item: T): void {
+        if (this.maxSize === 0) return;
         this.incrementFinalIndex();
         this.data[this.finalIndex()] = item;
     }
@@ -140,6 +146,7 @@ export default class CircularBuffer<T> extends Collection<T> {
      * Appends the value to the start of the buffer, removing the final element if the buffer is full.
      */
     public unshift(item: T): void {
+        if (this.maxSize === 0) return;
         this.decrementFirstIndex();
         this.data[this.firstIndex()] = item;
     }
