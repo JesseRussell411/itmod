@@ -283,7 +283,7 @@ export default class LinkedList<T> extends Collection<T> {
             if (_node === this._head) {
                 return this.unshift(value);
             }
-            const newNode: Node<T> = { value, linkedList: this, next: _node};
+            const newNode: Node<T> = { value, linkedList: this, next: _node };
 
             if (_node.previous !== undefined) {
                 // if existing node already have a node before it, switch links to connect new node to it so that it is before new node
@@ -302,7 +302,11 @@ export default class LinkedList<T> extends Collection<T> {
             if (_node === this._tail) {
                 return this.push(value);
             }
-            const newNode: Node<T> = { value, linkedList: this, previous: _node };
+            const newNode: Node<T> = {
+                value,
+                linkedList: this,
+                previous: _node,
+            };
 
             if (_node.next !== undefined) {
                 // if existing node already have a node after it, switch links to connect new node to it so that it is after new node

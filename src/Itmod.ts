@@ -1,4 +1,5 @@
 import CircularBuffer from "./collections/CircularBuffer";
+import Collection from "./collections/Collection";
 import { asArray, asIterable, asSet } from "./collections/as";
 import {
     isArray,
@@ -191,7 +192,7 @@ export default class Itmod<T> implements Iterable<T> {
     // prettier-ignore
     public static generate<T>(count: bigint, generator: (index: bigint) => T): Itmod<T>;
     // prettier-ignore
-    public static generate<T>( count: number, generator: (index: number) => T): Itmod<T>;
+    public static generate<T>(count: number, generator: (index: number) => T): Itmod<T>;
     public static generate<T>(
         count: number | bigint,
         generatorOrItem: ((index: number | bigint) => T) | T
@@ -544,18 +545,19 @@ export default class Itmod<T> implements Iterable<T> {
         const self = this;
         return function repeat(times: number | bigint): Itmod<T> {
             requireIntegerOrInfinity(times);
-            if (times === 0) return Itmod.of();
+            if (typeof times === "number") requireSafeInteger(times);
+            if (times === 0) return Itmod.empty();
             if (times < 0) {
                 return self.reverse().repeat(-times);
             }
 
-            // source is infinite
             if (self.properties.infinite) {
+                // source is infinite
                 return self;
             }
 
-            // repeat infinite times
             if (times === Infinity) {
+                // repeat infinite times
                 return new Itmod({ infinite: true }, function* () {
                     const source = self.getSource();
 
@@ -571,7 +573,7 @@ export default class Itmod<T> implements Iterable<T> {
 
             return new Itmod({}, function* () {
                 const source = self.getSource();
-                const cached = isArray(source)
+                const cached = isSolid(source)
                     ? source
                     : cachedIterable(source);
                 for (let i = zeroLike(times); i < times; i++) {
@@ -766,6 +768,7 @@ export default class Itmod<T> implements Iterable<T> {
      * Copies all the items into an {@link Array}.
      */
     public get toArray() {
+        this.requireSelfNotInfinite("cannot copy infinite items into an array");
         const self = this;
         const externalToArray = toArray;
         return function toArray(): T[] {
@@ -782,6 +785,7 @@ export default class Itmod<T> implements Iterable<T> {
      * Copies all the items into a {@link Set}.
      */
     public get toSet() {
+        this.requireSelfNotInfinite("cannot copy infinite items into a set");
         const self = this;
         const externalToSet = toSet;
         return function toSet(): Set<T> {
@@ -795,22 +799,39 @@ export default class Itmod<T> implements Iterable<T> {
     }
 
     public get toMap(): {
+        /**
+         * @returns A {@link Map} of the items in the itmod.
+         */
         (): T extends MapEntryLike<infer K, infer V>
             ? Map<K, V>
             : Map<unknown, unknown>;
+        /**
+         * @returns A {@link Map} of the items in the itmod.
+         * @param keySelector Returns the key to use in the map entry for each item.
+         */
         <K>(
             keySelector: (item: T, index: number) => K,
             valueSelector?: undefined
         ): T extends MapEntryLike<any, infer V> ? Map<K, V> : Map<K, unknown>;
+        /**
+         * @returns A {@link Map} of the items in the itmod.
+         * @param valueSelector Returns the value to use in the map entry for each item.
+         */
         <V>(
             keySelector: undefined,
             valueSelector: (item: T, index: number) => V
         ): T extends MapEntryLike<infer K, any> ? Map<K, V> : Map<unknown, V>;
+        /**
+         * @returns A {@link Map} of the items in the itmod.
+         * @param keySelector Returns the key to use in the map entry for each item.
+         * @param valueSelector Returns the value to use in the map entry for each item.
+         */
         <K, V>(
             keySelector: (item: T, index: number) => K,
             valueSelector: (item: T, index: number) => V
         ): Map<K, V>;
     } {
+        this.requireSelfNotInfinite("cannot copy infinite items into a map");
         const self = this;
         return function toMap(
             keySelector: (item: T, index: number) => any = (item: any) =>
@@ -834,10 +855,60 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    public get toObject(): {
+        (): T extends MapEntryLike<infer K extends keyof any, infer V>
+            ? Record<K, V>
+            : {};
+        <K extends keyof any>(
+            keySelector: (item: T, index: number) => K,
+            valueSelector?: undefined
+        ): T extends MapEntryLike<any, infer V>
+            ? Record<K, V>
+            : Record<K, unknown>;
+        <V>(
+            keySelector: undefined,
+            valueSelector: (item: T, index: number) => V
+        ): T extends MapEntryLike<infer K extends keyof any, any>
+            ? Record<K, V>
+            : {};
+        <K extends keyof any, V>(
+            keySelector: (item: T, index: number) => K,
+            valueSelector: (item: T, index: number) => V
+        ): Record<K, V>;
+    } {
+        this.requireSelfNotInfinite(
+            "cannot copy infinite items into an object"
+        );
+        const self = this;
+        return function toObject<K, V>(
+            keySelector: (item: T, index: number) => any = (item: any) =>
+                item?.[0],
+            valueSelector: (item: T, index: number) => any = (item: any) =>
+                item?.[1]
+        ): any {
+            const result = {} as Record<any, any>;
+
+            let i = 0;
+            for (const item of self) {
+                const key = keySelector(item, i);
+                const value = valueSelector(item, i);
+
+                result[key] = value;
+
+                i++;
+            }
+
+            return result;
+        };
+    }
+
     /**
      * If the {@link Iterable} is an {@link Array}, returns that {@link Set} as readonly; otherwise, copies all the items into an {@link Array} and returns that.
      */
     public get asArray() {
+        this.requireSelfNotInfinite(
+            "cannot represent infinite items as an array"
+        );
         const self = this;
         const externalAsArray = asArray;
         return function asArray(): readonly T[] {
@@ -850,6 +921,7 @@ export default class Itmod<T> implements Iterable<T> {
      * If the {@link Iterable} is a {@link Set}, returns that {@link Set}] as readonly; otherwise, copies all the items into a {@link Set} and returns that.
      */
     public get asSet() {
+        this.requireSelfNotInfinite("cannot represent infinite items as a set");
         const self = this;
         const externalAsSet = asSet;
         return function asSet(): ReadonlySet<T> {
@@ -859,26 +931,41 @@ export default class Itmod<T> implements Iterable<T> {
     }
 
     public get asMap(): {
+        /** @returns A {@link ReadonlyMap} view of the itmod. */
         (): T extends MapEntryLike<infer K, infer V>
             ? ReadonlyMap<K, V>
             : ReadonlyMap<unknown, unknown>;
+        /**
+         * @returns A {@link ReadonlyMap} view of the itmod.
+         * @param keySelector Returns the key to use in the map entry for each item.
+         */
         <K>(
             keySelector: (item: T, index: number) => K,
             valueSelector?: undefined
         ): T extends MapEntryLike<any, infer V>
             ? ReadonlyMap<K, V>
             : ReadonlyMap<K, unknown>;
+        /**
+         * @returns A {@link ReadonlyMap} view of the itmod.
+         * @param valueSelector Returns the value to use in the map entry for each item.
+         */
         <V>(
             keySelector: undefined,
             valueSelector: (item: T, index: number) => V
         ): T extends MapEntryLike<infer K, any>
             ? ReadonlyMap<K, V>
             : ReadonlyMap<unknown, V>;
+        /**
+         * @returns A {@link ReadonlyMap} view of the itmod.
+         * @param keySelector Returns the key to use in the map entry for each item.
+         * @param valueSelector Returns the value to use in the map entry for each item.
+         */
         <K, V>(
             keySelector: (item: T, index: number) => K,
             valueSelector: (item: T, index: number) => V
         ): ReadonlyMap<K, V>;
     } {
+        this.requireSelfNotInfinite("cannot represent infinite items as a map");
         const self = this;
         return function asMap(
             keySelector: (item: T, index: number) => any = (item: any) =>
@@ -890,11 +977,47 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    public get asObject(): {
+        (): T extends MapEntryLike<infer K extends keyof any, infer V>
+            ? Readonly<Record<K, V>>
+            : Readonly<{}>;
+        <K extends keyof any>(
+            keySelector: (item: T, index: number) => K,
+            valueSelector?: undefined
+        ): T extends MapEntryLike<any, infer V>
+            ? Readonly<Record<K, V>>
+            : Readonly<Record<K, unknown>>;
+        <V>(
+            keySelector: undefined,
+            valueSelector: (item: T, index: number) => V
+        ): T extends MapEntryLike<infer K extends keyof any, any>
+            ? Readonly<Record<K, V>>
+            : Readonly<{}>;
+        <K extends keyof any, V>(
+            keySelector: (item: T, index: number) => K,
+            valueSelector: (item: T, index: number) => V
+        ): Readonly<Record<K, V>>;
+    } {
+        this.requireSelfNotInfinite(
+            "cannot represent infinite items as an object"
+        );
+        const self = this;
+        return function asObject(
+            keySelector: (item: T, index: number) => any = (item: any) =>
+                item?.[0],
+            valueSelector: (item: T, index: number) => any = (item: any) =>
+                item?.[1]
+        ): any {
+            return self.toObject(keySelector, valueSelector);
+        };
+    }
+
     /**
      * Sorts the items.
      * @param orders How to sort the items. Defaults to {@link autoComparator}.
      */
     public get sort() {
+        this.requireSelfNotInfinite("cannot sort infinite items");
         const self = this;
         return function sort(...orders: Order<T>[]): SortedItmod<T> {
             return new SortedItmod(
@@ -921,6 +1044,17 @@ export default class Itmod<T> implements Iterable<T> {
              */
             is: (a: T, b: O) => boolean = (a, b) => Object.is(a, b)
         ) {
+            if (other instanceof Itmod) {
+                if (self.properties.infinite !== other.properties.infinite) {
+                    return false;
+                }
+
+                if (self.properties.infinite && other.properties.infinite) {
+                    throw new NeverEndingOperationError(
+                        "cannot check if two infinite sequences are equal"
+                    );
+                }
+            }
             const source = self.getSource();
 
             // try to check size
@@ -1012,7 +1146,7 @@ export class MappedItmod<T, R> extends Itmod<R> {
                 } else {
                     const iterator = source[Symbol.iterator]();
                     let next = iterator.next();
-                    let i = 0;
+                    let i = zeroLike(count);
                     for (; i < count; i++) {
                         if (next.done) return;
                         next = iterator.next();
@@ -1271,6 +1405,9 @@ function skipFinal<T>(
     };
 }
 
+/**
+ * @returns 0n if the input is a bigint; 0 if the input is a number;
+ */
 function zeroLike<N extends number | bigint>(n: N): N extends number ? 0 : 0n {
     if (typeof n === "number") {
         return 0 as any;
@@ -1279,8 +1416,11 @@ function zeroLike<N extends number | bigint>(n: N): N extends number ? 0 : 0n {
     }
 }
 
-function isSolid<T>(
-    iterable: Iterable<T>
-): iterable is ReadonlyArray<T> | ReadonlySet<T> {
-    return isArray(iterable) || isSet(iterable);
+function isSolid<T>(iterable: Iterable<T>): boolean {
+    return (
+        isArray(iterable) ||
+        iterable instanceof Set ||
+        iterable instanceof Map ||
+        iterable instanceof Collection
+    );
 }

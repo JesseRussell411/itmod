@@ -2,7 +2,7 @@ import Itmod from "../Itmod";
 import Collection from "./Collection";
 
 /**
- * @returns The given collection copied into a {@link Array}.
+ * @returns The given collection copied into an {@link Array}.
  */
 export function toArray<T>(collection: Iterable<T> | undefined): T[] {
     if (collection instanceof Itmod) {

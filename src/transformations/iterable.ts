@@ -14,6 +14,7 @@ export function nonIteratedCountOrUndefined(
     iterable: Iterable<any>
 ): number | undefined {
     if (Array.isArray(iterable)) return iterable.length;
+    
     if (
         iterable instanceof Set ||
         iterable instanceof Map ||
@@ -25,6 +26,8 @@ export function nonIteratedCountOrUndefined(
     if (iterable instanceof Itmod) {
         return iterable.nonIteratedCountOrUndefined();
     }
+
+    return undefined;
 }
 
 export function min<T>(

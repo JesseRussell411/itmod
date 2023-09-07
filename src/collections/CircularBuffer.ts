@@ -3,8 +3,6 @@ import Collection from "./Collection";
 
 /**
  * Buffer of limited size that can shift, unshift, push, and pop elements equally efficiently. Elements can be added until the maximum size is reached; whereupon, elements on the opposite side of the buffer are removed to make room.
- *
- * Note that an {@link Array} is allocated at creation that is equal in size to the maxSize.
  */
 export default class CircularBuffer<T> extends Collection<T> {
     private data: (T | undefined)[];
@@ -64,17 +62,34 @@ export default class CircularBuffer<T> extends Collection<T> {
     }
 
     public *[Symbol.iterator](): Iterator<T> {
-        for (let i = 0; i < this.size; i++) {
-            return this.at(i);
+        if (this.isSplit()) {
+            for (let i = this.firstIndex(); i < this.maxSize; i++) {
+                yield this.data[i] as T;
+            }
+
+            const endLength = this.offset - (this.maxSize - this.size);
+            for (let i = 0; i < endLength; i++) {
+                yield this.data[i] as T;
+            }
+        } else {
+            const end = this.offset + this.size;
+            for (let i = this.offset; i < end; i++) {
+                yield this.data[i] as T;
+            }
         }
     }
 
+    /**
+     * @param maxLength Maximum length of the returned array. Truncates values that don't fit from the end of the buffer.
+     */
     public toArray(maxLength: number = Infinity): T[] {
         if (this.isSplit()) {
             const beginningLength = this.maxSize - this.offset;
 
             const endLength = this.offset - (this.maxSize - this.size);
 
+            // design note: much faster than iteration, [...buffer], but I wish javascript had a memcopy, like function for copying items from a sections of one array to a section of another.
+            // This requires the slice function to create a "middleman" array that isn't really necessary.
             return [
                 // beginning is at the end of the array
                 ...this.data.slice(
@@ -85,7 +100,9 @@ export default class CircularBuffer<T> extends Collection<T> {
                 ...this.data.slice(
                     0,
                     Math.min(
-                        Math.max(0, maxLength - beginningLength),
+                        maxLength >= beginningLength
+                            ? maxLength - beginningLength
+                            : 0,
                         endLength
                     )
                 ),

@@ -14,6 +14,14 @@ import {
 import MapEntry from "../types/MapEntry";
 import Collection from "./Collection";
 
+// TODO? red-black tree, this is an avl tree because avl trees are easy
+
+// design note: If they ever add a sorted map to the ecmascript standard,
+// I will be very happy to switch to that and make this a deprecated wrapper around it,
+// or even a child class of it.
+
+// I'm sure whatever the V8 team can put together in C would be much more efficient than my undergrad level, intro to data structures avl tree.
+
 export interface SortedMapEntry<K, V> extends MapEntry<K, V> {
     readonly key: K;
     readonly value: V;
@@ -136,7 +144,7 @@ class Node<K, V> extends Array<K | V> implements SortedMapEntry<K, V> {
         this.left = left!.right;
         left!.right = this;
         left!.update();
-        this!.update();
+        this.update();
         return left!;
     }
 
@@ -163,14 +171,6 @@ class Node<K, V> extends Array<K | V> implements SortedMapEntry<K, V> {
         delete this.right;
     }
 }
-
-// TODO? red-black tree, this is an avl tree because avl trees are easy
-
-// design note: If they ever add a sorted map or set to the ecmascript standard,
-// I will be very happy to make this a deprecated wrapper around that,
-// or even a child class of it.
-
-// I'm sure whatever the V8 team can put together in C would be much more efficient than my undergrad level, intro to data structures avl tree.
 
 /**
  * A map that stores key-value pairs in the order specified.
@@ -363,7 +363,7 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
      * @param compute Returns the value to be used if the key isn't found. Is called once in that case.
      */
     public getOrCompute(key: K, compute: () => V): V {
-        return this.getEntryOrCompute(key, compute).value;
+        return this.getNodeOrCompute(key, compute).value;
     }
 
     /**
