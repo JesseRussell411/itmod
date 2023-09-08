@@ -166,7 +166,7 @@ export default class Itmod<T> implements Iterable<T> {
         } = {}
     ): Itmod<
         [
-            K &
+            (K extends number ? string : K) &
                 (
                     | (IncludeStringKeys extends false ? never : string)
                     | (IncludeSymbolKeys extends false ? never : symbol)
@@ -174,7 +174,6 @@ export default class Itmod<T> implements Iterable<T> {
             V
         ]
     > {
-        // TODO add inherited values
         const instance = resultOf(object);
         if (includeStringKeys && includeSymbolKeys) {
             return new Itmod({ expensive: true, fresh: true }, () =>
