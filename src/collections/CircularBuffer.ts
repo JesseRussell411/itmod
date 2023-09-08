@@ -53,7 +53,7 @@ export default class CircularBuffer<T> extends Collection<T> {
 
     /** Whether the {@link maxSize} has been reached. */
     public get isFull(): boolean {
-        return this.size >= this.maxSize;
+        return this.size === this.maxSize;
     }
 
     /** Whether the {@link maxSize} has not been reached. */
@@ -88,7 +88,7 @@ export default class CircularBuffer<T> extends Collection<T> {
 
             const endLength = this.offset - (this.maxSize - this.size);
 
-            // design note: much faster than iteration, [...buffer], but I wish javascript had a memcopy, like function for copying items from a sections of one array to a section of another.
+            // design note: much faster than iteration, [...buffer], but I wish javascript had a memcopy-like function for copying items from a section of one array to a section of another.
             // This requires the slice function to create a "middleman" array that isn't really necessary.
             return [
                 // beginning is at the end of the array
