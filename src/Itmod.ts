@@ -1152,10 +1152,12 @@ export class MappedItmod<T, R> extends Itmod<R> {
                         next = iterator.next();
                     }
 
+                    let j = Number(i);
+
                     while (!next.done) {
-                        yield self.mapping(next.value, i);
+                        yield self.mapping(next.value, j);
                         next = iterator.next();
-                        i++;
+                        j++;
                     }
                 }
             });
