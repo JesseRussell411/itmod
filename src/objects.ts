@@ -1,4 +1,3 @@
-import { asSet } from "./collections/as";
 import { Unpick } from "./types/object";
 
 /**
