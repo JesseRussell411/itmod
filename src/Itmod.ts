@@ -1,12 +1,7 @@
 import CircularBuffer from "./collections/CircularBuffer";
 import Collection from "./collections/Collection";
 import { asArray, asIterable, asSet } from "./collections/as";
-import {
-    isArray,
-    isArrayAsWritable,
-    isSet,
-    isSetAsWritable,
-} from "./collections/is";
+import { isArray, isArrayAsWritable, isSetAsWritable } from "./collections/is";
 import {
     cachingIterable as cachedIterable,
     emptyIterable,
@@ -147,18 +142,38 @@ export default class Itmod<T> implements Iterable<T> {
     /**
      * @returns A Itmod over the entries of the given object.
      */
-    public static fromObject<K extends keyof any, V>(
+    public static fromObject<
+        K extends keyof any,
+        V,
+        IncludeStringKeys extends boolean | undefined,
+        IncludeSymbolKeys extends boolean | undefined
+    >(
         object: Record<K, V> | (() => Record<K, V>),
         {
             includeStringKeys = true,
-            includeSymbolKeys = false,
+            includeSymbolKeys = true,
         }: {
-            /** Whether to include fields indexed by symbols. Defaults to true. */
-            includeSymbolKeys?: boolean;
-            /** Whether to include fields indexed by strings. Defaults to true. */
-            includeStringKeys?: boolean;
+            /**
+             * Whether to include fields indexed by symbols.
+             * @default true
+             */
+            includeSymbolKeys?: IncludeSymbolKeys;
+            /**
+             * Whether to include fields indexed by strings. Defaults to true.
+             * @default true
+             */
+            includeStringKeys?: IncludeStringKeys;
         } = {}
-    ): Itmod<[K & (string | symbol), V]> {
+    ): Itmod<
+        [
+            K &
+                (
+                    | (IncludeStringKeys extends false ? never : string)
+                    | (IncludeSymbolKeys extends false ? never : symbol)
+                ),
+            V
+        ]
+    > {
         // TODO add inherited values
         const instance = resultOf(object);
         if (includeStringKeys && includeSymbolKeys) {
@@ -174,25 +189,25 @@ export default class Itmod<T> implements Iterable<T> {
                     name as K & (string | symbol),
                     (instance as any)[name] as V,
                 ])
-            );
+            ) as any;
         } else if (includeSymbolKeys) {
             return new Itmod({ expensive: true, fresh: true }, () =>
                 Object.getOwnPropertySymbols(instance).map((symbol) => [
                     symbol as K & (string | symbol),
                     (instance as any)[symbol] as V,
                 ])
-            );
+            ) as any;
         } else {
             return Itmod.of();
         }
     }
 
     // TODO docs
-    public static generate<T>(count: number | bigint, item: T): Itmod<T>;
     // prettier-ignore
     public static generate<T>(count: bigint, generator: (index: bigint) => T): Itmod<T>;
     // prettier-ignore
     public static generate<T>(count: number, generator: (index: number) => T): Itmod<T>;
+    public static generate<T>(count: number | bigint, item: T): Itmod<T>;
     public static generate<T>(
         count: number | bigint,
         generatorOrItem: ((index: number | bigint) => T) | T
