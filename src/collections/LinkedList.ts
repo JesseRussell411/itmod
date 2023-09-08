@@ -10,14 +10,14 @@ export interface LinkedListNode<T> {
     readonly previous?: LinkedListNode<T>;
     /** This {@link LinkedListNode}'s value. */
     readonly value: T;
-    /** The {@link LinkedList} that this {@link LinkedListNode} belongs to. */
-    readonly linkedList?: LinkedList<T>;
 }
 
 /** private, writable node type */
 interface Node<T> extends Writable<LinkedListNode<T>> {
     next?: Node<T>;
     previous?: Node<T>;
+    /** The {@link LinkedList} that this {@link LinkedListNode} belongs to. */
+    linkedList?: LinkedList<T>;
 }
 
 /**
@@ -328,7 +328,7 @@ export default class LinkedList<T> extends Collection<T> {
      *
      * @returns Whether the value was set.
      */
-    public setValue(node: LinkedListNode<T>, newValue: T): boolean {
+    public reValue(node: LinkedListNode<T>, newValue: T): boolean {
         const _node = node as Node<T>;
         if (_node.linkedList !== this) return false;
 

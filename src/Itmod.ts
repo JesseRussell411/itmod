@@ -1,10 +1,12 @@
 import CircularBuffer from "./collections/CircularBuffer";
 import Collection from "./collections/Collection";
+import SortedSequence from "./collections/SortedSequence";
 import { asArray, asIterable, asSet } from "./collections/as";
 import { isArray, isArrayAsWritable, isSetAsWritable } from "./collections/is";
 import {
     cachingIterable as cachedIterable,
     emptyIterable,
+    nonIteratedCountOrUndefined,
     range,
 } from "./collections/iterables";
 import { toArray, toSet } from "./collections/to";
@@ -25,11 +27,6 @@ import {
     autoComparator,
     reverseOrder,
 } from "./sorting";
-import {
-    max,
-    min,
-    nonIteratedCountOrUndefined,
-} from "./transformations/iterable";
 import MapEntryLike from "./types/MapEntryLike";
 import { General } from "./types/literals";
 
@@ -703,21 +700,33 @@ export default class Itmod<T> implements Iterable<T> {
      */
     public get min() {
         this.requireSelfNotInfinite(
-            "cannot get the smallest of infinite values"
+            "cannot get the largest of infinite values"
         );
         const self = this;
-        const externalMin = min;
         return function min(
             count: number | bigint,
             order: Order<T> = autoComparator
         ) {
             requireSafeInteger(requireNonNegative(count));
-            return new Itmod({}, () => externalMin(self, count, order));
+            if (count === 0 || count === 0n) return Itmod.empty();
+
+            return new Itmod({ fresh: true, expensive: true }, () => {
+                const source = self.getSource();
+
+                const result = new SortedSequence<T>(order, {
+                    maxSize: Number(count),
+                    keep: "least",
+                });
+
+                result.pushMany(source);
+
+                return result;
+            });
         };
     }
 
     /**
-     * @returns The smallest given number of items.
+     * @returns The largest given number of items.
      * @param count How many items to return.
      * @param order How to sort the items.
      */
@@ -726,13 +735,25 @@ export default class Itmod<T> implements Iterable<T> {
             "cannot get the largest of infinite values"
         );
         const self = this;
-        const externalMax = max;
         return function max(
             count: number | bigint,
             order: Order<T> = autoComparator
         ) {
             requireSafeInteger(requireNonNegative(count));
-            return new Itmod({}, () => externalMax(self, count, order));
+            if (count === 0 || count === 0n) return Itmod.empty();
+
+            return new Itmod({ fresh: true, expensive: true }, () => {
+                const source = self.getSource();
+
+                const result = new SortedSequence<T>(order, {
+                    maxSize: Number(count),
+                    keep: "greatest",
+                });
+
+                result.pushMany(source);
+
+                return result;
+            });
         };
     }
 
@@ -1043,6 +1064,24 @@ export default class Itmod<T> implements Iterable<T> {
     }
 
     /**
+     * Sorts the items in descending order.
+     * @param orders How to sort the items. Defaults to {@link autoComparator}.
+     */
+    public get sortDescending() {
+        this.requireSelfNotInfinite("cannot sort infinite items");
+        const self = this;
+        return function sortDescending(...orders: Order<T>[]): SortedItmod<T> {
+            return new SortedItmod(
+                self.properties,
+                self.getSource,
+                orders.length === 0
+                    ? [reverseOrder(autoComparator)]
+                    : orders.map(reverseOrder)
+            );
+        };
+    }
+
+    /**
      * Checks if the given Iterable contains the same items in the same order as the {@link Itmod}.
      *
      * @param other The given Iterable.
@@ -1093,21 +1132,6 @@ export default class Itmod<T> implements Iterable<T> {
 
                 if (!is(aNext.value, bNext.value)) return false;
             }
-        };
-    }
-
-    /**
-     * Sorts the items in descending order.
-     * @param orders How to sort the items. Defaults to {@link autoComparator}.
-     */
-    public get sortDescending() {
-        const self = this;
-        return function sort(...orders: Order<T>[]): SortedItmod<T> {
-            return new SortedItmod(
-                self.properties,
-                self.getSource,
-                orders.length === 0 ? [reverseOrder(autoComparator)] : orders
-            );
         };
     }
 
@@ -1199,12 +1223,15 @@ export class SortedItmod<T> extends Itmod<T> {
         properties: ItmodProperties<T>,
         getSource: () => Iterable<T>,
         orders: readonly Order<T>[],
-        { preSorted = false }: { preSorted?: boolean } = {}
+        {
+            preSorted = false,
+        }: {
+            /** The source has already been sorted. */
+            preSorted?: boolean;
+        } = {}
     ) {
         super(
-            preSorted !== undefined
-                ? properties
-                : { fresh: true, expensive: true },
+            preSorted ? properties : { fresh: true, expensive: true },
             preSorted
                 ? getSource
                 : () => {
@@ -1263,53 +1290,17 @@ export class SortedItmod<T> extends Itmod<T> {
         };
     }
 
-    public get min() {
-        const self = this;
-        const externalMin = min;
-        return function min(count: number | bigint) {
-            return new SortedItmod(
-                { ...self.originalProperties, fresh: true, expensive: true },
-                () =>
-                    externalMin(
-                        self.originalGetSource(),
-                        count,
-                        self.comparator
-                    ),
-                self.orders,
-                { preSorted: true }
-            );
-        };
-    }
-
-    public get max() {
-        const self = this;
-        const externalMax = max;
-        return function max(count: number | bigint) {
-            return new SortedItmod(
-                { ...self.originalProperties, fresh: true, expensive: true },
-                () =>
-                    externalMax(
-                        self.originalGetSource(),
-                        count,
-                        self.comparator
-                    ),
-                self.orders,
-                { preSorted: true }
-            );
-        };
-    }
-
     public get take() {
         const self = this;
         return function take(count: number | bigint) {
-            return self.min(count);
+            return self.min(count, self.comparator);
         };
     }
 
     public get takeFinal() {
         const self = this;
         return function takeFinal(count: number | bigint) {
-            return self.max(count);
+            return self.max(count, self.comparator);
         };
     }
 }
@@ -1348,7 +1339,7 @@ function skip<T>(count: number | bigint, source: Iterable<T>): Iterable<T> {
             if (isArray(source)) {
                 const numberCount = Number(count);
                 if (numberCount === Infinity) return [];
-                for (let i = Number(count); i < source.length; i++) {
+                for (let i = numberCount; i < source.length; i++) {
                     yield source[i] as T;
                 }
             } else {

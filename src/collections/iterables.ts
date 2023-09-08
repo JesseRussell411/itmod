@@ -1,3 +1,5 @@
+import Itmod from "../Itmod";
+import Collection from "./Collection";
 import { asIterator } from "./as";
 
 /**
@@ -173,4 +175,29 @@ export function cachingIterable<T>(
             }
         },
     };
+}
+
+/**
+ * Attempts to determine the number of values in the {@link Iterable} without iterating it.
+ * @param iterable
+ * @returns The size of the {@link Iterable} or undefined if the size couldn't be determined without iterating it.
+ */
+export function nonIteratedCountOrUndefined(
+    iterable: Iterable<any>
+): number | undefined {
+    if (Array.isArray(iterable)) return iterable.length;
+
+    if (
+        iterable instanceof Set ||
+        iterable instanceof Map ||
+        iterable instanceof Collection
+    ) {
+        return iterable.size;
+    }
+
+    if (iterable instanceof Itmod) {
+        return iterable.nonIteratedCountOrUndefined();
+    }
+
+    return undefined;
 }

@@ -15,7 +15,7 @@ import MapEntry from "../types/MapEntry";
 import Collection from "./Collection";
 
 // TODO? red-black tree, this is an avl tree because avl trees are easy
-
+// TODO? get rid of backlink (node.map)
 // design note: If they ever add a sorted map to the ecmascript standard,
 // I will be very happy to switch to that and make this a deprecated wrapper around it,
 // or even a child class of it.
@@ -25,8 +25,6 @@ import Collection from "./Collection";
 export interface SortedMapEntry<K, V> extends MapEntry<K, V> {
     readonly key: K;
     readonly value: V;
-    /** The map that this entry belongs to. Undefined if the entry has been deleted. */
-    readonly sortedMap?: SortedMap<K, V>;
 }
 
 class Node<K, V> extends Array<K | V> implements SortedMapEntry<K, V> {
@@ -319,7 +317,7 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
      *
      * @returns Whether the key was replaced.
      */
-    public setKey(entry: SortedMapEntry<K, V>, newKey: K): boolean {
+    public reKey(entry: SortedMapEntry<K, V>, newKey: K): boolean {
         const node = entry as Node<K, V>;
 
         // does the entry belong to this map?
@@ -337,7 +335,7 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
      *
      * @returns Whether the value was replaced.
      */
-    public setValue(entry: SortedMapEntry<K, V>, newValue: V): boolean {
+    public reValue(entry: SortedMapEntry<K, V>, newValue: V): boolean {
         const node = entry as Node<K, V>;
 
         // does the entry belong to this map?
@@ -369,22 +367,28 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
     /**
      * @returns An {@link Iterable} over the entries between the given min and max values.
      *
-     * @param min Parameters for minimum value. If undefined, the range will start at the entry with the smallest key (inclusive).
-     * @param max Parameters for maximum value. If undefined, the range will end at the entry with the largest key (inclusive).
+     * @param min The minimum value or Parameters for minimum value. If undefined, the range will start at the entry with the smallest key (inclusive). If a function, whether the key is not too small.
+     * @param max The maximum value or Parameters for maximum value. If undefined, the range will end at the entry with the largest key (inclusive). If a function, whether the key is not to big.
      */
     public getRange(
-        min?: [
-            /** The value to use as the min. */
-            key: K,
-            /** Whether the max value is inclusive or exclusive. Defaults to inclusive. */
-            type?: "inclusive" | "exclusive"
-        ],
-        max?: [
-            /** The value to use as the max. */
-            key: K,
-            /** Whether the min value is inclusive or exclusive. Defaults to inclusive. */
-            type?: "inclusive" | "exclusive"
-        ],
+        min?:
+            | [
+                  /** The value to use as the min. */
+                  key: K,
+                  /** Whether the max value is inclusive or exclusive. Defaults to inclusive. */
+                  type?: "inclusive" | "exclusive"
+              ]
+            | ((key: K) => boolean)
+            | K,
+        max?:
+            | [
+                  /** The value to use as the max. */
+                  key: K,
+                  /** Whether the min value is inclusive or exclusive. Defaults to inclusive. */
+                  type?: "inclusive" | "exclusive"
+              ]
+            | ((key: K) => boolean)
+            | K,
         {
             reversed = false,
         }: {
@@ -395,29 +399,45 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
         const self = this;
         function* recur(node: Node<K, V> | undefined): Generator<Node<K, V>> {
             if (node === undefined) return;
+            let tooBig = false;
+            let tooSmall = false;
 
             if (min !== undefined) {
-                const cmp = self.comparator(min[0], node.key);
-                if ((min[1] === "exclusive" ? cmpLE : cmpLT)(cmp)) {
-                    return;
+                if (min instanceof Function) {
+                    if (!min(node.key)) tooSmall = true;
+                } else if (Array.isArray(min)) {
+                    const cmp = self.comparator(node.key, min[0]);
+                    if ((min[1] === "exclusive" ? cmpLE : cmpLT)(cmp)) {
+                        tooSmall = true;
+                    }
+                } else {
+                    const cmp = self.comparator(node.key, min);
+                    if (cmpLT(cmp)) tooSmall = true;
                 }
             }
 
             if (max !== undefined) {
-                const cmp = self.comparator(max[0], node.key);
-                if ((max[1] === "exclusive" ? cmpGE : cmpGT)(cmp)) {
-                    return;
+                if (max instanceof Function) {
+                    if (!max(node.key)) tooBig = true;
+                } else if (Array.isArray(max)) {
+                    const cmp = self.comparator(node.key, max[0]);
+                    if ((max[1] === "exclusive" ? cmpGE : cmpGT)(cmp)) {
+                        tooBig = true;
+                    }
+                } else {
+                    const cmp = self.comparator(node.key, max);
+                    if (cmpGT(cmp)) tooBig = true;
                 }
             }
 
             if (reversed) {
-                yield* recur(node.right);
-                yield node;
-                yield* recur(node.left);
+                if (!tooBig) yield* recur(node.right);
+                if (!tooBig && !tooSmall) yield node;
+                if (!tooSmall) yield* recur(node.left);
             } else {
-                yield* recur(node.left);
-                yield node;
-                yield* recur(node.right);
+                if (!tooSmall) yield* recur(node.left);
+                if (!tooBig && !tooSmall) yield node;
+                if (!tooBig) yield* recur(node.right);
             }
         }
 
@@ -444,6 +464,39 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
         this.comparator = reverseComparator(this.comparator);
     }
 
+    public keys(): Iterable<K> {
+        const self = this;
+        return {
+            *[Symbol.iterator]() {
+                for (const entry of self) {
+                    yield entry.key;
+                }
+            },
+        };
+    }
+
+    public values(): Iterable<V> {
+        const self = this;
+        return {
+            *[Symbol.iterator]() {
+                for (const entry of self) {
+                    yield entry.value;
+                }
+            },
+        };
+    }
+
+    public entries(): Iterable<[key: K, value: V]> {
+        const self = this;
+        return {
+            *[Symbol.iterator]() {
+                for (const entry of self) {
+                    yield [entry.key, entry.value];
+                }
+            },
+        };
+    }
+
     private emancipateAllNodes(): void {
         return this._emancipateAllNodes(this.root);
     }
@@ -460,13 +513,13 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
     private _invert(node: Node<K, V> | undefined): void {
         if (node === undefined) return;
 
-        this._invert(node.left);
-        this._invert(node.right);
-
         const left = node.left;
         node.left = node.right;
         node.right = left;
         node.updateBalanceFactor();
+
+        this._invert(node.left);
+        this._invert(node.right);
     }
 
     private getNode(key: K): Node<K, V> | undefined {

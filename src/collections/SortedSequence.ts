@@ -69,8 +69,14 @@ export default class SortedSequence<T> extends Collection<T> {
 
         this.data.deleteLargest((entry) => {
             entry.value.pop();
-            return entry.value.isEmpty;
-            // The key doesn't need to be replaced in this case because it's the first element that gets used as the key, which will be the last element removed from the end.
+            if (entry.value.isEmpty) {
+                return true;
+            } else {
+                // Replace key with one that is definitely in the linked list so that the current key can be garbage collected.
+                // Because, if the current key is not in the linked list, the sorted map might be the only thing holding it.
+                this.data.reKey(entry, entry.value.head!.value);
+                return false;
+            }
         });
 
         this.size--;
@@ -90,13 +96,25 @@ export default class SortedSequence<T> extends Collection<T> {
             } else {
                 // Replace key with one that is definitely in the linked list so that the current key can be garbage collected.
                 // Because, if the current key is not in the linked list, the sorted map might be the only thing holding it.
-                this.data.setKey(entry, entry.value.head!.value);
+                this.data.reKey(entry, entry.value.head!.value);
                 return false;
             }
         });
 
         this.size--;
         return true;
+    }
+
+    /** @returns The largest value in the sequence. */
+    public getLargest(): T | undefined {
+        if (this.isEmpty) return undefined;
+        return this.data.getLargestEntry()?.value.tail?.value;
+    }
+
+    /** @returns The smallest value in the sequence. */
+    public getSmallest(): T | undefined {
+        if (this.isEmpty) return undefined;
+        return this.data.getSmallestEntry()?.value.head?.value;
     }
 
     /**
