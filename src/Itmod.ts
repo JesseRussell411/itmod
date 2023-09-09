@@ -16,8 +16,8 @@ import { identity, resultOf, returns } from "./functional/functions";
 import {
     requireIntegerOrInfinity,
     requireNonNegative,
-    requireNonZero,
     requireSafeInteger,
+    requireSafeIntegerOrInfinity,
 } from "./require";
 import { BreakSignal, breakSignal } from "./signals";
 import {
@@ -379,7 +379,7 @@ export default class Itmod<T> implements Iterable<T> {
                 /** The index of the current value. */
                 index: number
             ) => R
-        ): R;
+        ): R | undefined;
         /**
          * Combines all the items into one using the given reducer function.
          * @param reducer Combines each item with the accumulating result, starting with the first two items.
@@ -408,15 +408,6 @@ export default class Itmod<T> implements Iterable<T> {
             finalize: (result: any, count: number) => any = identity
         ): any {
             const source = self.getSource();
-
-            // array optimization
-            if (isArray(source)) {
-                if (source.length === 0) {
-                    return finalize(undefined, 0);
-                } else {
-                    return finalize(source.reduce(reducer), source.length);
-                }
-            }
 
             const iterator = source[Symbol.iterator]();
             let next = iterator.next();
@@ -464,26 +455,10 @@ export default class Itmod<T> implements Iterable<T> {
         ) {
             const source = self.getSource();
 
-            // array optimization
-            if (isArray(source)) {
-                if (source.length === 0) {
-                    return finalize(initialValue, 0);
-                } else {
-                    return finalize(
-                        source.reduce(reducer, initialValue),
-                        source.length
-                    );
-                }
-            }
-
-            const iterator = source[Symbol.iterator]();
-            let next = iterator.next();
-            if (next.done) {
-                return finalize(initialValue, 0);
-            }
-
             let accumulator = initialValue;
             let i = 0;
+            const iterator = source[Symbol.iterator]();
+            let next: IteratorResult<T>;
             while (!(next = iterator.next()).done) {
                 accumulator = reducer(accumulator, next.value, i);
                 i++;
@@ -538,8 +513,7 @@ export default class Itmod<T> implements Iterable<T> {
             return new Itmod(
                 { infinite: self.properties.infinite },
                 function* () {
-                    const source = self.getSource();
-                    const array = asArray(source);
+                    const array = self.asArray();
                     for (let i = array.length - 1; i >= 0; i--) {
                         yield array[i] as T;
                     }
@@ -601,7 +575,7 @@ export default class Itmod<T> implements Iterable<T> {
         const self = this;
         const externalTake = take;
         return function take(count: number | bigint): Itmod<T> {
-            requireIntegerOrInfinity(requireNonZero(count));
+            requireIntegerOrInfinity(requireNonNegative(count));
             return new Itmod({}, () => externalTake(count, self.getSource()));
         };
     }
@@ -613,7 +587,7 @@ export default class Itmod<T> implements Iterable<T> {
         const self = this;
         const externalSkip = skip;
         return function skip(count: number | bigint): Itmod<T> {
-            requireIntegerOrInfinity(requireNonZero(count));
+            requireIntegerOrInfinity(requireNonNegative(count));
             return new Itmod({}, () => externalSkip(count, self.getSource()));
         };
     }
@@ -646,19 +620,19 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
-    /**
-     * @deprecated not implemented yet
-     */
-    public get takeSparse() {
-        throw new NotImplementedError();
-    }
+    // /**
+    //  * @deprecated not implemented yet
+    //  */
+    // public get takeSparse() {
+    //     throw new NotImplementedError();
+    // }
 
-    /**
-     * @deprecated not implemented yet
-     */
-    public get skipSparse() {
-        throw new NotImplementedError();
-    }
+    // /**
+    //  * @deprecated not implemented yet
+    //  */
+    // public get skipSparse() {
+    //     throw new NotImplementedError();
+    // }
 
     /**
      * Attempts to determine how many items are in the {@link Iterable} without iterating it.
@@ -706,9 +680,10 @@ export default class Itmod<T> implements Iterable<T> {
         return function min(
             count: number | bigint,
             order: Order<T> = autoComparator
-        ) {
-            requireSafeInteger(requireNonNegative(count));
-            if (count === 0 || count === 0n) return Itmod.empty();
+        ): Itmod<T> {
+            requireSafeIntegerOrInfinity(requireNonNegative(count));
+            if (count === 0 || count === 0n) return Itmod.empty<T>();
+            if (count === Infinity) return self.sort(order);
 
             return new Itmod({ fresh: true, expensive: true }, () => {
                 const source = self.getSource();
@@ -738,9 +713,10 @@ export default class Itmod<T> implements Iterable<T> {
         return function max(
             count: number | bigint,
             order: Order<T> = autoComparator
-        ) {
-            requireSafeInteger(requireNonNegative(count));
-            if (count === 0 || count === 0n) return Itmod.empty();
+        ): Itmod<T> {
+            requireSafeIntegerOrInfinity(requireNonNegative(count));
+            if (count === 0 || count === 0n) return Itmod.empty<T>();
+            if (count === Infinity) return self.sort(order);
 
             return new Itmod({ fresh: true, expensive: true }, () => {
                 const source = self.getSource();
@@ -868,25 +844,21 @@ export default class Itmod<T> implements Iterable<T> {
     } {
         this.requireSelfNotInfinite("cannot copy infinite items into a map");
         const self = this;
+        const externalToMap = toMap;
         return function toMap(
-            keySelector: (item: T, index: number) => any = (item: any) =>
-                item?.[0],
-            valueSelector: (item: T, index: number) => any = (item: any) =>
-                item?.[1]
+            keySelector?: (item: T, index: number) => any,
+            valueSelector?: (item: T, index: number) => any
         ): any {
-            const result = new Map<any, any>();
-
-            let i = 0;
-            for (const item of self) {
-                const key = keySelector(item, i);
-                const value = valueSelector(item, i);
-
-                result.set(key, value);
-
-                i++;
+            const source = self.getSource();
+            if (
+                keySelector === undefined &&
+                valueSelector === undefined &&
+                self.properties.fresh &&
+                source instanceof Map
+            ) {
+                return source;
             }
-
-            return result;
+            return externalToMap(source, keySelector, valueSelector);
         };
     }
 
@@ -1003,12 +975,18 @@ export default class Itmod<T> implements Iterable<T> {
         this.requireSelfNotInfinite("cannot represent infinite items as a map");
         const self = this;
         return function asMap(
-            keySelector: (item: T, index: number) => any = (item: any) =>
-                item?.[0],
-            valueSelector: (item: T, index: number) => any = (item: any) =>
-                item?.[1]
+            keySelector?: (item: T, index: number) => any,
+            valueSelector?: (item: T, index: number) => any
         ): any {
-            return self.toMap(keySelector, valueSelector);
+            const source = self.getSource();
+            if (
+                keySelector === undefined &&
+                valueSelector === undefined &&
+                source instanceof Map
+            ) {
+                return source;
+            }
+            return toMap(source, keySelector, valueSelector);
         };
     }
 
@@ -1078,6 +1056,38 @@ export default class Itmod<T> implements Iterable<T> {
                     ? [reverseOrder(autoComparator)]
                     : orders.map(reverseOrder)
             );
+        };
+    }
+
+    /**
+     * Shuffles the items.
+     * @param getRandomInt Returns a random integer that's greater than or equal to 0 and less than upperBound. Defaults to using {@link Math.random}, which is not cryptographically secure.
+     */
+    public get shuffle() {
+        this.requireSelfNotInfinite("cannot shuffle infinite items");
+        const self = this;
+        return function shuffle(getRandomInt?: (upperBound: number) => number) {
+            return new Itmod({ fresh: true, expensive: true }, () => {
+                const array = self.toArray();
+                fisherYatesShuffle(array, getRandomInt);
+                return array;
+            });
+        };
+    }
+
+    /**
+     * Internally collapses the iterable into a solid collection like an {@link Array}.
+     */
+    public get collapse() {
+        this.requireSelfNotInfinite("cannot collapse infinite items");
+        const self = this;
+        return function collapse() {
+            const source = self.getSource();
+            if (isSolid(source)) {
+                return Itmod.from(source);
+            } else {
+                return Itmod.from([...source]);
+            }
         };
     }
 
@@ -1399,13 +1409,11 @@ function skipFinal<T>(
     return {
         *[Symbol.iterator]() {
             const buffer = new CircularBuffer<T>(Number(count));
-            let i = zeroLike(count);
+
             for (const item of source) {
-                buffer.unshift(item);
-                if (i >= count) {
+                buffer.push(item);
+                if (buffer.isFull) {
                     yield buffer.at(0)!;
-                } else {
-                    i++;
                 }
             }
         },
@@ -1430,4 +1438,47 @@ function isSolid<T>(iterable: Iterable<T>): boolean {
         iterable instanceof Map ||
         iterable instanceof Collection
     );
+}
+
+function toMap<T>(
+    source: Iterable<T>,
+    keySelector: (item: T, index: number) => any = (i: any) => i?.[0],
+    valueSelector: (item: T, index: number) => any = (i: any) => i?.[1]
+): any {
+    const result = new Map<any, any>();
+
+    let i = 0;
+    for (const item of source) {
+        const key = keySelector(item, i);
+        const value = valueSelector(item, i);
+
+        result.set(key, value);
+
+        i++;
+    }
+
+    return result;
+}
+
+/**
+ * Shuffles the given array in place.
+ * @param array What to shuffle.
+ * @param getRandomInt Returns a random integer that's greater than or equal to 0 and less than upperBound. Defaults to using {@link Math.random}, which is not cryptographically secure.
+ */
+export function fisherYatesShuffle(
+    array: any[],
+    getRandomInt: (upperBound: number) => number = defaultGetRandomInt
+): void {
+    // Fisher-Yates algorithm
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = getRandomInt(i + 1);
+
+        const temp = array[i]!;
+        array[i] = array[j]!;
+        array[j] = temp;
+    }
+}
+
+function defaultGetRandomInt(upperBound: number) {
+    return Math.trunc(Math.random() * upperBound);
 }

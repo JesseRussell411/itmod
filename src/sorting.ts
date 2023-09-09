@@ -9,7 +9,7 @@ export type Comparator<T> = (a: T, b: T) => number;
 /**
  * A mapping function that returns the value to compare the argument by.
  */
-export type FieldSelector<T> = (t: T) => unknown;
+export type FieldSelector<T> = (t: T) => any;
 /**
  * A field by which to compare values of type T by.
  */
