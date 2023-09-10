@@ -11,7 +11,6 @@ import {
 } from "./collections/iterables";
 import { toArray, toSet } from "./collections/to";
 import NeverEndingOperationError from "./errors/NeverEndingOperationError";
-import NotImplementedError from "./errors/NotImplementedError";
 import { identity, resultOf, returns } from "./functional/functions";
 import {
     requireIntegerOrInfinity,
