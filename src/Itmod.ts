@@ -22,6 +22,8 @@ import {
 import { BreakSignal, breakSignal } from "./signals";
 import {
     Comparator,
+    Field,
+    FieldSelector,
     Order,
     asComparator,
     autoComparator,
@@ -1029,7 +1031,14 @@ export default class Itmod<T> implements Iterable<T> {
      * Sorts the items.
      * @param orders How to sort the items. Defaults to {@link autoComparator}.
      */
-    public get sort() {
+    public get sort(): {
+        (order: Comparator<T>): SortedItmod<T>;
+        (order: FieldSelector<T>): SortedItmod<T>;
+        (order: Field<T>): SortedItmod<T>;
+        (...orders: (Comparator<T> | Field<T>)[]): SortedItmod<T>;
+        (...orders: (FieldSelector<T> | Field<T>)[]): SortedItmod<T>;
+        (...orders: Order<T>[]): SortedItmod<T>;
+    } {
         this.requireSelfNotInfinite("cannot sort infinite items");
         const self = this;
         return function sort(...orders: Order<T>[]): SortedItmod<T> {
@@ -1045,7 +1054,14 @@ export default class Itmod<T> implements Iterable<T> {
      * Sorts the items in descending order.
      * @param orders How to sort the items. Defaults to {@link autoComparator}.
      */
-    public get sortDescending() {
+    public get sortDescending(): {
+        (order: Comparator<T>): SortedItmod<T>;
+        (order: FieldSelector<T>): SortedItmod<T>;
+        (order: Field<T>): SortedItmod<T>;
+        (...orders: (Comparator<T> | Field<T>)[]): SortedItmod<T>;
+        (...orders: (FieldSelector<T> | Field<T>)[]): SortedItmod<T>;
+        (...orders: Order<T>[]): SortedItmod<T>;
+    } {
         this.requireSelfNotInfinite("cannot sort infinite items");
         const self = this;
         return function sortDescending(...orders: Order<T>[]): SortedItmod<T> {
@@ -1156,72 +1172,6 @@ export default class Itmod<T> implements Iterable<T> {
 }
 
 /**
- * {@link Itmod} With a mapping applied to its items. The result of {@link Itmod.map}.
- */
-export class MappedItmod<T, R> extends Itmod<R> {
-    protected readonly mapping: (value: T, index: number) => R;
-    protected readonly originalGetSource: () => Iterable<T>;
-    protected readonly originalProperties: ItmodProperties<T>;
-
-    public constructor(
-        properties: ItmodProperties<T>,
-        getSource: () => Iterable<T>,
-        mapping: (value: T, index: number) => R
-    ) {
-        super({ infinite: properties.infinite }, function* () {
-            const source = getSource();
-            let i = 0;
-            for (const value of source) {
-                yield mapping(value, i);
-                i++;
-            }
-        });
-        this.mapping = mapping;
-        this.originalGetSource = getSource;
-        this.originalProperties = properties;
-    }
-
-    public get skip() {
-        const self = this;
-        return function skip(count: number | bigint) {
-            requireNonNegative(requireIntegerOrInfinity(count));
-            return new Itmod({}, function* () {
-                const source = self.originalGetSource();
-                if (isArray(source)) {
-                    for (let i = Number(count); i < source.length; i++) {
-                        yield self.mapping(source[i] as T, i);
-                    }
-                } else {
-                    const iterator = source[Symbol.iterator]();
-                    let next = iterator.next();
-                    let i = zeroLike(count);
-                    for (; i < count; i++) {
-                        if (next.done) return;
-                        next = iterator.next();
-                    }
-
-                    let j = Number(i);
-
-                    while (!next.done) {
-                        yield self.mapping(next.value, j);
-                        next = iterator.next();
-                        j++;
-                    }
-                }
-            });
-        };
-    }
-
-    public get takeSparse() {
-        throw new NotImplementedError();
-    }
-
-    public get skipSparse() {
-        throw new NotImplementedError();
-    }
-}
-
-/**
  * An {@link Itmod} with a sort applied to its items. The result of {@link Itmod.sort}.
  */
 export class SortedItmod<T> extends Itmod<T> {
@@ -1275,7 +1225,14 @@ export class SortedItmod<T> extends Itmod<T> {
     /**
      * Adds more fallback sorts to the {@link SortedItmod}.
      */
-    public get thenBy() {
+    public get thenBy(): {
+        (order: Comparator<T>): SortedItmod<T>;
+        (order: FieldSelector<T>): SortedItmod<T>;
+        (order: Field<T>): SortedItmod<T>;
+        (...orders: (Comparator<T> | Field<T>)[]): SortedItmod<T>;
+        (...orders: (FieldSelector<T> | Field<T>)[]): SortedItmod<T>;
+        (...orders: Order<T>[]): SortedItmod<T>;
+    } {
         const self = this;
         return function thenBy(...orders: Order<T>[]): SortedItmod<T> {
             return new SortedItmod(
@@ -1289,7 +1246,14 @@ export class SortedItmod<T> extends Itmod<T> {
     /**
      * Adds more fallback sorts to the {@link SortedItmod} in descending order.
      */
-    public get thenByDescending() {
+    public get thenByDescending(): {
+        (order: Comparator<T>): SortedItmod<T>;
+        (order: FieldSelector<T>): SortedItmod<T>;
+        (order: Field<T>): SortedItmod<T>;
+        (...orders: (Comparator<T> | Field<T>)[]): SortedItmod<T>;
+        (...orders: (FieldSelector<T> | Field<T>)[]): SortedItmod<T>;
+        (...orders: Order<T>[]): SortedItmod<T>;
+    } {
         const self = this;
         return function thenBy(...orders: Order<T>[]): SortedItmod<T> {
             return new SortedItmod(
@@ -1401,6 +1365,7 @@ function skipFinal<T>(
     if (count === 0 || count === 0n) return source;
 
     const size = nonIteratedCountOrUndefined(source);
+
     if (size !== undefined) {
         if (count >= size) return [];
         return take(size - Number(count), source);
@@ -1411,10 +1376,8 @@ function skipFinal<T>(
             const buffer = new CircularBuffer<T>(Number(count));
 
             for (const item of source) {
+                if (buffer.isFull) yield buffer.at(0)!;
                 buffer.push(item);
-                if (buffer.isFull) {
-                    yield buffer.at(0)!;
-                }
             }
         },
     };

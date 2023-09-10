@@ -17,7 +17,7 @@ export type Field<T> = keyof T;
 /**
  * Represents an ordering of values of type T.
  */
-export type Order<T> = Comparator<T> | FieldSelector<T> | Field<T>;
+export type Order<T> = Comparator<T> | FieldSelector<T>  | Field<T>;
 
 /**
  * @returns Whether the given {@link Order} is represented by a {@link Comparator}.
