@@ -1487,6 +1487,9 @@ describe("sortDescending", () => {
 test("shuffle", () => {
     // not really any guarantied way to test shuffle.
     expect(Itmod.of(1, 2, 3).shuffle().count()).toBe(3);
+    expect(Itmod.of(1, 2, 3).shuffle()).toEqual(
+        expect.arrayContaining([1, 2, 3])
+    );
 });
 
 test("collapse", () => {
