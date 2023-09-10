@@ -937,6 +937,93 @@ describe("toSet", () => {
     });
 });
 
+describe("toMap", () => {
+    const itmod = Itmod.of(
+        [5, "five", "V"],
+        { 0: 23, 1: "twenty three", 2: "XXIII" },
+        [0, "zero", ""],
+        [1, "one", "I"]
+    );
+    test("default", () => {
+        const map = itmod.toMap();
+        expect([...map].map((e) => e[0])).toEqual([5, 23, 0, 1]);
+        expect([...map].map((e) => e[1])).toEqual([
+            "five",
+            "twenty three",
+            "zero",
+            "one",
+        ]);
+    });
+    test("with keySelector", () => {
+        const map = itmod.toMap((e) => e[2]);
+        expect([...map].map((e) => e[0])).toEqual(["V", "XXIII", "", "I"]);
+        expect([...map].map((e) => e[1])).toEqual([
+            "five",
+            "twenty three",
+            "zero",
+            "one",
+        ]);
+    });
+    test("with valueSelector", () => {
+        const map = itmod.toMap(undefined, (e) => e[2]);
+        expect([...map].map((e) => e[0])).toEqual([5, 23, 0, 1]);
+        expect([...map].map((e) => e[1])).toEqual(["V", "XXIII", "", "I"]);
+    });
+    test("with keySelector and valueSelector", () => {
+        const map = itmod.toMap(undefined, (e) => e[2]);
+        expect([...map].map((e) => e[0])).toEqual([5, 23, 0, 1]);
+        expect([...map].map((e) => e[1])).toEqual(["V", "XXIII", "", "I"]);
+    });
+});
+
+describe("toObject", () => {
+    const itmod = Itmod.of(
+        [5, "five", "V"],
+        { 0: 23, 1: "twenty three", 2: "XXIII" },
+        [0, "zero", ""],
+        [1, "one", "I"]
+    );
+    test("default", () => {
+        const object = itmod.toObject();
+        expect([...Object.entries(object)].map((e) => e[0])).toEqual(
+            expect.arrayContaining(["5", "23", "0", "1"])
+        );
+        expect([...Object.entries(object)].map((e) => e[1])).toEqual(
+            expect.arrayContaining(["five", "twenty three", "zero", "one"])
+        );
+    });
+    test("with keySelector", () => {
+        const object = itmod.toObject((e) => e[2]);
+        expect([...Object.entries(object)].map((e) => e[0])).toEqual(
+            expect.arrayContaining(["V", "XXIII", "", "I"])
+        );
+        expect([...Object.entries(object)].map((e) => e[1])).toEqual(
+            expect.arrayContaining(["five", "twenty three", "zero", "one"])
+        );
+    });
+    test("with valueSelector", () => {
+        const object = itmod.toObject(undefined, (e) => e[2]);
+        expect([...Object.entries(object)].map((e) => e[0])).toEqual(
+            expect.arrayContaining(["5", "23", "0", "1"])
+        );
+        expect([...Object.entries(object)].map((e) => e[1])).toEqual(
+            expect.arrayContaining(["V", "XXIII", "", "I"])
+        );
+    });
+    test("with keySelector and valueSelector", () => {
+        const object = itmod.toObject(
+            (e) => e[1],
+            (e) => e[2]
+        );
+        expect([...Object.entries(object)].map((e) => e[0])).toEqual(
+            expect.arrayContaining(["five", "twenty three", "zero", "one"])
+        );
+        expect([...Object.entries(object)].map((e) => e[1])).toEqual(
+            expect.arrayContaining(["V", "XXIII", "", "I"])
+        );
+    });
+});
+
 describe("asArray", () => {
     test("infinite items throws error", () => {
         expect(() => {
@@ -965,6 +1052,93 @@ describe("asSet", () => {
             );
             expect(itmod.asSet().size).toBe(8);
         });
+    });
+});
+
+describe("asMap", () => {
+    const itmod = Itmod.of(
+        [5, "five", "V"],
+        { 0: 23, 1: "twenty three", 2: "XXIII" },
+        [0, "zero", ""],
+        [1, "one", "I"]
+    );
+    test("default", () => {
+        const map = itmod.asMap();
+        expect([...map].map((e) => e[0])).toEqual([5, 23, 0, 1]);
+        expect([...map].map((e) => e[1])).toEqual([
+            "five",
+            "twenty three",
+            "zero",
+            "one",
+        ]);
+    });
+    test("with keySelector", () => {
+        const map = itmod.asMap((e) => e[2]);
+        expect([...map].map((e) => e[0])).toEqual(["V", "XXIII", "", "I"]);
+        expect([...map].map((e) => e[1])).toEqual([
+            "five",
+            "twenty three",
+            "zero",
+            "one",
+        ]);
+    });
+    test("with valueSelector", () => {
+        const map = itmod.asMap(undefined, (e) => e[2]);
+        expect([...map].map((e) => e[0])).toEqual([5, 23, 0, 1]);
+        expect([...map].map((e) => e[1])).toEqual(["V", "XXIII", "", "I"]);
+    });
+    test("with keySelector and valueSelector", () => {
+        const map = itmod.asMap(undefined, (e) => e[2]);
+        expect([...map].map((e) => e[0])).toEqual([5, 23, 0, 1]);
+        expect([...map].map((e) => e[1])).toEqual(["V", "XXIII", "", "I"]);
+    });
+});
+
+describe("asObject", () => {
+    const itmod = Itmod.of(
+        [5, "five", "V"],
+        { 0: 23, 1: "twenty three", 2: "XXIII" },
+        [0, "zero", ""],
+        [1, "one", "I"]
+    );
+    test("default", () => {
+        const object = itmod.asObject();
+        expect([...Object.entries(object)].map((e) => e[0])).toEqual(
+            expect.arrayContaining(["5", "23", "0", "1"])
+        );
+        expect([...Object.entries(object)].map((e) => e[1])).toEqual(
+            expect.arrayContaining(["five", "twenty three", "zero", "one"])
+        );
+    });
+    test("with keySelector", () => {
+        const object = itmod.asObject((e) => e[2]);
+        expect([...Object.entries(object)].map((e) => e[0])).toEqual(
+            expect.arrayContaining(["V", "XXIII", "", "I"])
+        );
+        expect([...Object.entries(object)].map((e) => e[1])).toEqual(
+            expect.arrayContaining(["five", "twenty three", "zero", "one"])
+        );
+    });
+    test("with valueSelector", () => {
+        const object = itmod.asObject(undefined, (e) => e[2]);
+        expect([...Object.entries(object)].map((e) => e[0])).toEqual(
+            expect.arrayContaining(["5", "23", "0", "1"])
+        );
+        expect([...Object.entries(object)].map((e) => e[1])).toEqual(
+            expect.arrayContaining(["V", "XXIII", "", "I"])
+        );
+    });
+    test("with keySelector and valueSelector", () => {
+        const object = itmod.asObject(
+            (e) => e[1],
+            (e) => e[2]
+        );
+        expect([...Object.entries(object)].map((e) => e[0])).toEqual(
+            expect.arrayContaining(["five", "twenty three", "zero", "one"])
+        );
+        expect([...Object.entries(object)].map((e) => e[1])).toEqual(
+            expect.arrayContaining(["V", "XXIII", "", "I"])
+        );
     });
 });
 
@@ -1307,6 +1481,69 @@ describe("sortDescending", () => {
         expect(sorted.map((c) => c.age).toArray()).toEqual([
             12, 90, 90, 5, 40, 30, 40, 10, 20,
         ]);
+    });
+});
+
+test("shuffle", () => {
+    // not really any guarantied way to test shuffle.
+    expect(Itmod.of(1, 2, 3).shuffle().count()).toBe(3);
+});
+
+test("collapse", () => {
+    let i = 0;
+    const itmod = Itmod.generate(3, () => i++).collapse();
+    expect(itmod.toArray()).toEqual([0, 1, 2]);
+    expect(itmod.toArray()).toEqual([0, 1, 2]);
+});
+
+describe("sequenceEqual", () => {
+    describe("default id function", () => {
+        test("equal", () => {
+            expect(
+                Itmod.of(1, 4, 5, 5, 6, 7, 8).sequenceEquals([
+                    1, 4, 5, 5, 6, 7, 8,
+                ])
+            ).toBe(true);
+        });
+        test("notEqual", () => {
+            expect(
+                Itmod.of(1, 4, 5, 5, 6, 7, 8).sequenceEquals([1, 3, 6, 8, 6, 7])
+            ).toBe(false);
+        });
+    });
+    describe("custom is function", () => {
+        test("equal", () => {
+            expect(
+                Itmod.of(
+                    "12",
+                    "46",
+                    "54",
+                    "53",
+                    "64",
+                    "74",
+                    "85"
+                ).sequenceEquals(
+                    ["12", "46", "54", "33", "64", "24", "85"],
+                    (a, b) => a[1] === b[1]
+                )
+            ).toBe(true);
+        });
+        test("notEqual", () => {
+            expect(
+                Itmod.of(
+                    "12",
+                    "46",
+                    "54",
+                    "53",
+                    "64",
+                    "74",
+                    "85"
+                ).sequenceEquals(
+                    ["14", "46", "54", "33", "64", "24"],
+                    (a, b) => a[1] === b[1]
+                )
+            ).toBe(false);
+        });
     });
 });
 
