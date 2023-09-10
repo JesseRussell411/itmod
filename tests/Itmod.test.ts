@@ -2,6 +2,7 @@ import Itmod from "../src/Itmod";
 import LinkedList from "../src/collections/LinkedList";
 import NeverEndingOperationError from "../src/errors/NeverEndingOperationError";
 import { breakSignal } from "../src/signals";
+import { autoComparator } from "../src/sorting";
 
 test("iterator", () => {
     const itmod = Itmod.of(1, 2, 3, 4);
@@ -11,12 +12,12 @@ test("iterator", () => {
         array.push(n);
     }
 
-    expect(array).toEqual(expect.arrayContaining([1, 2, 3, 4]));
+    expect(array).toEqual([1, 2, 3, 4]);
 });
 
 test("constructor", () => {
     const itmod = new Itmod({}, () => [1, 2, 3, 4]);
-    expect([...itmod]).toEqual(expect.arrayContaining([1, 2, 3, 4]));
+    expect([...itmod]).toEqual([1, 2, 3, 4]);
 });
 
 describe("from", () => {
@@ -28,11 +29,11 @@ describe("from", () => {
                 }
             },
         });
-        expect([...itmod]).toEqual(expect.arrayContaining([1, 2, 3, 4]));
+        expect([...itmod]).toEqual([1, 2, 3, 4]);
     });
     test("iterator", () => {
         const itmod = Itmod.from([1, 2, 3, 4][Symbol.iterator]());
-        expect([...itmod]).toEqual(expect.arrayContaining([1, 2, 3, 4]));
+        expect([...itmod]).toEqual([1, 2, 3, 4]);
     });
     test("iterableGetter", () => {
         const itmod = Itmod.from(() => ({
@@ -42,23 +43,23 @@ describe("from", () => {
                 }
             },
         }));
-        expect([...itmod]).toEqual(expect.arrayContaining([1, 2, 3, 4]));
+        expect([...itmod]).toEqual([1, 2, 3, 4]);
     });
     test("iteratorGetter", () => {
         const itmod = Itmod.from(() => [1, 2, 3, 4][Symbol.iterator]());
-        expect([...itmod]).toEqual(expect.arrayContaining([1, 2, 3, 4]));
+        expect([...itmod]).toEqual([1, 2, 3, 4]);
     });
 });
 
 test("of", () => {
     const itmod = Itmod.of(1, 2, 3, 4);
-    expect([...itmod]).toEqual(expect.arrayContaining([1, 2, 3, 4]));
+    expect([...itmod]).toEqual([1, 2, 3, 4]);
 });
 
 test("empty", () => {
     const itmod = Itmod.empty();
     expect(itmod.count()).toBe(0);
-    expect([...itmod]).toEqual(expect.arrayContaining([]));
+    expect([...itmod]).toEqual([]);
 });
 
 describe("fromObject", () => {
@@ -69,9 +70,7 @@ describe("fromObject", () => {
             { includeStringKeys: true, includeSymbolKeys: false }
         );
         const array = [...itmod];
-        expect(array.map((entry) => entry[0])).toEqual(
-            expect.arrayContaining(["bar"])
-        );
+        expect(array.map((entry) => entry[0])).toEqual(["bar"]);
     });
     test("symbol keys only", () => {
         const foo = Symbol("foo");
@@ -80,9 +79,7 @@ describe("fromObject", () => {
             { includeStringKeys: false, includeSymbolKeys: true }
         );
         const array = [...itmod];
-        expect(array.map((entry) => entry[0])).toEqual(
-            expect.arrayContaining([foo])
-        );
+        expect(array.map((entry) => entry[0])).toEqual([foo]);
     });
     test("string and symbol keys", () => {
         const foo = Symbol("foo");
@@ -104,23 +101,19 @@ describe("fromObject", () => {
 describe("generate", () => {
     test("number count of fixed item", () => {
         const itmod = Itmod.generate(4, "foo");
-        expect([...itmod]).toEqual(
-            expect.arrayContaining(["foo", "foo", "foo", "foo"])
-        );
+        expect([...itmod]).toEqual(["foo", "foo", "foo", "foo"]);
     });
     test("bigint count of fixed item", () => {
         const itmod = Itmod.generate(4n, "foo");
-        expect([...itmod]).toEqual(
-            expect.arrayContaining(["foo", "foo", "foo", "foo"])
-        );
+        expect([...itmod]).toEqual(["foo", "foo", "foo", "foo"]);
     });
     test("number count of callback item", () => {
         const itmod = Itmod.generate(4, (i) => i + 1);
-        expect([...itmod]).toEqual(expect.arrayContaining([1, 2, 3, 4]));
+        expect([...itmod]).toEqual([1, 2, 3, 4]);
     });
     test("bigint count of callback item", () => {
         const itmod = Itmod.generate(4n, (i) => i + 1n);
-        expect([...itmod]).toEqual(expect.arrayContaining([1n, 2n, 3n, 4n]));
+        expect([...itmod]).toEqual([1n, 2n, 3n, 4n]);
     });
 });
 
@@ -129,26 +122,22 @@ describe("range", () => {
         describe("positive step", () => {
             test("start less than end", () => {
                 const itmod = Itmod.range(-4n, 6n, 2n);
-                expect([...itmod]).toEqual(
-                    expect.arrayContaining([-4n, -2n, 0n, 2n, 4n])
-                );
+                expect([...itmod]).toEqual([-4n, -2n, 0n, 2n, 4n]);
             });
             test("end less than start to be empty", () => {
                 const itmod = Itmod.range(4n, -6n, 2n);
-                expect([...itmod]).toEqual(expect.arrayContaining([]));
+                expect([...itmod]).toEqual([]);
                 expect(itmod.count()).toBe(0);
             });
         });
         describe("negative step", () => {
             test("end less than start", () => {
                 const itmod = Itmod.range(4n, -6n, -2n);
-                expect([...itmod]).toEqual(
-                    expect.arrayContaining([4n, 2n, 0n, -2n, -4n])
-                );
+                expect([...itmod]).toEqual([4n, 2n, 0n, -2n, -4n]);
             });
             test("start less than end to be empty", () => {
                 const itmod = Itmod.range(-4n, 6n, -2n);
-                expect([...itmod]).toEqual(expect.arrayContaining([]));
+                expect([...itmod]).toEqual([]);
                 expect(itmod.count()).toBe(0);
             });
         });
@@ -156,26 +145,22 @@ describe("range", () => {
     describe("bigint start, end", () => {
         test("start less than end", () => {
             const itmod = Itmod.range(-2n, 3n);
-            expect([...itmod]).toEqual(
-                expect.arrayContaining([-2n, -1n, 0n, 1n, 2n])
-            );
+            expect([...itmod]).toEqual([-2n, -1n, 0n, 1n, 2n]);
         });
         test("end less than start to be empty", () => {
             const itmod = Itmod.range(2n, -3n);
-            expect([...itmod]).toEqual(expect.arrayContaining([]));
+            expect([...itmod]).toEqual([]);
             expect(itmod.count()).toBe(0);
         });
     });
     describe("bigint end", () => {
         test("5n end to not be empty", () => {
             const itmod = Itmod.range(5n);
-            expect([...itmod]).toEqual(
-                expect.arrayContaining([0n, 1n, 2n, 3n, 4n])
-            );
+            expect([...itmod]).toEqual([0n, 1n, 2n, 3n, 4n]);
         });
         test("0n end to be empty", () => {
             const itmod = Itmod.range(0n);
-            expect([...itmod]).toEqual(expect.arrayContaining([]));
+            expect([...itmod]).toEqual([]);
             expect(itmod.count()).toBe(0);
         });
     });
@@ -183,26 +168,22 @@ describe("range", () => {
         describe("positive step", () => {
             test("start less than end", () => {
                 const itmod = Itmod.range(-4, 6, 2);
-                expect([...itmod]).toEqual(
-                    expect.arrayContaining([-4, -2, 0, 2, 4])
-                );
+                expect([...itmod]).toEqual([-4, -2, 0, 2, 4]);
             });
             test("end less than start to be empty", () => {
                 const itmod = Itmod.range(4, -6, 2);
-                expect([...itmod]).toEqual(expect.arrayContaining([]));
+                expect([...itmod]).toEqual([]);
                 expect(itmod.count()).toBe(0);
             });
         });
         describe("negative step", () => {
             test("end less than start", () => {
                 const itmod = Itmod.range(4, -6, -2);
-                expect([...itmod]).toEqual(
-                    expect.arrayContaining([4, 2, 0, -2, -4])
-                );
+                expect([...itmod]).toEqual([4, 2, 0, -2, -4]);
             });
             test("start less than end to be empty", () => {
                 const itmod = Itmod.range(-4, 6, -2);
-                expect([...itmod]).toEqual(expect.arrayContaining([]));
+                expect([...itmod]).toEqual([]);
                 expect(itmod.count()).toBe(0);
             });
         });
@@ -210,24 +191,22 @@ describe("range", () => {
     describe("start, end", () => {
         test("start less than end", () => {
             const itmod = Itmod.range(-2, 3);
-            expect([...itmod]).toEqual(
-                expect.arrayContaining([-2, -1, 0, 1, 2])
-            );
+            expect([...itmod]).toEqual([-2, -1, 0, 1, 2]);
         });
         test("end less than start to be empty", () => {
             const itmod = Itmod.range(2n, -3n);
-            expect([...itmod]).toEqual(expect.arrayContaining([]));
+            expect([...itmod]).toEqual([]);
             expect(itmod.count()).toBe(0);
         });
     });
     describe("end", () => {
         test("5 end to not be empty", () => {
             const itmod = Itmod.range(5);
-            expect([...itmod]).toEqual(expect.arrayContaining([0, 1, 2, 3, 4]));
+            expect([...itmod]).toEqual([0, 1, 2, 3, 4]);
         });
         test("0 end to be empty", () => {
             const itmod = Itmod.range(0);
-            expect([...itmod]).toEqual(expect.arrayContaining([]));
+            expect([...itmod]).toEqual([]);
             expect(itmod.count()).toBe(0);
         });
     });
@@ -244,7 +223,7 @@ describe("forEach", () => {
             count++;
         });
         expect(count).toBe(4);
-        expect(array).toEqual(expect.arrayContaining([2, 4, 6, 84]));
+        expect(array).toEqual([2, 4, 6, 84]);
     });
     test("on empty itmod does nothing", () => {
         const itmod = Itmod.empty<number>();
@@ -256,7 +235,7 @@ describe("forEach", () => {
             count++;
         });
         expect(count).toBe(0);
-        expect(array).toEqual(expect.arrayContaining([]));
+        expect(array).toEqual([]);
     });
     test("break signal", () => {
         const itmod = Itmod.of(1, 2, 3, 42);
@@ -269,7 +248,7 @@ describe("forEach", () => {
             count++;
         });
         expect(count).toBe(2);
-        expect(array).toEqual(expect.arrayContaining([2, 4]));
+        expect(array).toEqual([2, 4]);
     });
     test("index", () => {
         const itmod = Itmod.of(1, 2, 3, 42);
@@ -281,7 +260,7 @@ describe("forEach", () => {
             count++;
         });
         expect(count).toBe(4);
-        expect(array).toEqual(expect.arrayContaining([0, 2, 4, 6]));
+        expect(array).toEqual([0, 2, 4, 6]);
     });
 });
 
@@ -289,19 +268,19 @@ describe("map", () => {
     test("mapping of 4 numbers", () => {
         const itmod = Itmod.of(1, 2, 3, 42);
         const mapped = itmod.map((item) => item * 2);
-        expect([...mapped]).toEqual(expect.arrayContaining([2, 4, 6, 84]));
+        expect([...mapped]).toEqual([2, 4, 6, 84]);
         expect(mapped.count()).toBe(4);
     });
     test("mapping of empty is empty", () => {
         const itmod = Itmod.empty<number>();
         const mapped = itmod.map((item) => item * 2);
-        expect([...mapped]).toEqual(expect.arrayContaining([]));
+        expect([...mapped]).toEqual([]);
         expect(mapped.count()).toBe(0);
     });
     test("index", () => {
         const itmod = Itmod.of(1, 2, 3, 42);
         const mapped = itmod.map((_item, index) => index * 2);
-        expect([...mapped]).toEqual(expect.arrayContaining([0, 2, 4, 6]));
+        expect([...mapped]).toEqual([0, 2, 4, 6]);
         expect(mapped.count()).toBe(4);
     });
 });
@@ -310,19 +289,19 @@ describe("filter", () => {
     test("out of 10 numbers", () => {
         const itmod = Itmod.of(1, 2, 3, 42, 5, 6, 7, 8, 69);
         const filtered = itmod.filter((n) => n % 2 === 0);
-        expect([...filtered]).toEqual(expect.arrayContaining([2, 42, 6, 8]));
+        expect([...filtered]).toEqual([2, 42, 6, 8]);
         expect(filtered.count()).toBe(4);
     });
     test("out of empty is emtpy", () => {
         const itmod = Itmod.empty<number>();
         const filtered = itmod.filter((n) => n % 2 === 0);
-        expect([...filtered]).toEqual(expect.arrayContaining([]));
+        expect([...filtered]).toEqual([]);
         expect(filtered.count()).toBe(0);
     });
     test("index", () => {
         const itmod = Itmod.of(1, 2, 3, 42, 5, 6, 7, 8, 69);
         const filtered = itmod.filter((_, i) => i % 2 === 0);
-        expect([...filtered]).toEqual(expect.arrayContaining([1, 3, 5, 7, 69]));
+        expect([...filtered]).toEqual([1, 3, 5, 7, 69]);
         expect(filtered.count()).toBe(5);
     });
 });
@@ -422,19 +401,17 @@ describe("reverse", () => {
     test("empty", () => {
         const itmod = Itmod.empty<number>();
         const reversed = itmod.reverse();
-        expect([...reversed]).toEqual(expect.arrayContaining([]));
+        expect([...reversed]).toEqual([]);
     });
     test("of length 1", () => {
         const itmod = Itmod.of(42);
         const reversed = itmod.reverse();
-        expect([...reversed]).toEqual(expect.arrayContaining([42]));
+        expect([...reversed]).toEqual([42]);
     });
     test("of length 10", () => {
         const itmod = Itmod.of(1, 3, 5, 6, 7, 42, 4, 5, 6, 7);
         const reversed = itmod.reverse();
-        expect([...reversed]).toEqual(
-            expect.arrayContaining([7, 6, 5, 4, 42, 7, 6, 5, 3, 1])
-        );
+        expect([...reversed]).toEqual([7, 6, 5, 4, 42, 7, 6, 5, 3, 1]);
     });
 });
 
@@ -442,79 +419,67 @@ describe("repeat", () => {
     test("empty", () => {
         const itmod = Itmod.empty<number>();
         const reversed = itmod.reverse();
-        expect([...reversed]).toEqual(expect.arrayContaining([]));
+        expect([...reversed]).toEqual([]);
     });
     test("3 times", () => {
         const itmod = Itmod.of(1, 2, 3, 4);
-        const reversed = itmod.repeat(2);
-        expect([...reversed]).toEqual(
-            expect.arrayContaining([1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4])
-        );
+        const reversed = itmod.repeat(3);
+        expect([...reversed]).toEqual([1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4]);
     });
     test("2 times", () => {
         const itmod = Itmod.of(1, 2, 3, 4);
         const reversed = itmod.repeat(2);
-        expect([...reversed]).toEqual(
-            expect.arrayContaining([1, 2, 3, 4, 1, 2, 3, 4])
-        );
+        expect([...reversed]).toEqual([1, 2, 3, 4, 1, 2, 3, 4]);
     });
     test("1 times", () => {
         const itmod = Itmod.of(1, 2, 3, 4);
         const reversed = itmod.repeat(1);
-        expect([...reversed]).toEqual(expect.arrayContaining([1, 2, 3, 4]));
+        expect([...reversed]).toEqual([1, 2, 3, 4]);
     });
     test("0 times", () => {
         const itmod = Itmod.of(1, 2, 3, 4);
         const reversed = itmod.repeat(0);
-        expect([...reversed]).toEqual(expect.arrayContaining([]));
+        expect([...reversed]).toEqual([]);
     });
     test("-1 times", () => {
         const itmod = Itmod.of(1, 2, 3, 4);
-        const reversed = itmod.repeat(1);
-        expect([...reversed]).toEqual(expect.arrayContaining([4, 3, 2, 1]));
+        const reversed = itmod.repeat(-1);
+        expect([...reversed]).toEqual([4, 3, 2, 1]);
     });
     test("-2 times", () => {
         const itmod = Itmod.of(1, 2, 3, 4);
-        const reversed = itmod.repeat(2);
-        expect([...reversed]).toEqual(
-            expect.arrayContaining([4, 3, 2, 1, 4, 3, 2, 1])
-        );
+        const reversed = itmod.repeat(-2);
+        expect([...reversed]).toEqual([4, 3, 2, 1, 4, 3, 2, 1]);
     });
     test("-3 times", () => {
         const itmod = Itmod.of(1, 2, 3, 4);
-        const reversed = itmod.repeat(2);
-        expect([...reversed]).toEqual(
-            expect.arrayContaining([4, 3, 2, 1, 4, 3, 2, 1, 4, 3, 2, 1])
-        );
+        const reversed = itmod.repeat(-3);
+        expect([...reversed]).toEqual([4, 3, 2, 1, 4, 3, 2, 1, 4, 3, 2, 1]);
     });
     test("2n times", () => {
         const itmod = Itmod.of(1, 2, 3, 4);
-        const reversed = itmod.repeat(2);
-        expect([...reversed]).toEqual(
-            expect.arrayContaining([1, 2, 3, 4, 1, 2, 3, 4])
-        );
+        const reversed = itmod.repeat(2n);
+        expect([...reversed]).toEqual([1, 2, 3, 4, 1, 2, 3, 4]);
     });
     test("1n times", () => {
         const itmod = Itmod.of(1, 2, 3, 4);
-        const reversed = itmod.repeat(1);
-        expect([...reversed]).toEqual(expect.arrayContaining([1, 2, 3, 4]));
+        const reversed = itmod.repeat(1n);
+        expect([...reversed]).toEqual([1, 2, 3, 4]);
     });
     test("0n times", () => {
         const itmod = Itmod.of(1, 2, 3, 4);
-        const reversed = itmod.repeat(0);
-        expect([...reversed]).toEqual(expect.arrayContaining([]));
+        const reversed = itmod.repeat(0n);
+        expect([...reversed]).toEqual([]);
     });
     test("-1n times", () => {
         const itmod = Itmod.of(1, 2, 3, 4);
-        const reversed = itmod.repeat(1);
-        expect([...reversed]).toEqual(expect.arrayContaining([4, 3, 2, 1]));
+        const reversed = itmod.repeat(-1n);
+        expect([...reversed]).toEqual([4, 3, 2, 1]);
     });
     test("-2n times", () => {
         const itmod = Itmod.of(1, 2, 3, 4);
-        const reversed = itmod.repeat(2);
-        expect([...reversed]).toEqual(
-            expect.arrayContaining([4, 3, 2, 1, 4, 3, 2, 1])
-        );
+        const reversed = itmod.repeat(-2n);
+        expect([...reversed]).toEqual([4, 3, 2, 1, 4, 3, 2, 1]);
     });
 });
 
@@ -522,34 +487,32 @@ describe("take", () => {
     test("4 from 10", () => {
         const itmod = Itmod.range(0, 10);
         const taken = itmod.take(4);
-        expect([...taken]).toEqual(expect.arrayContaining([0, 1, 2, 3]));
+        expect([...taken]).toEqual([0, 1, 2, 3]);
     });
     test("4 from 4", () => {
         const itmod = Itmod.range(0, 4);
         const taken = itmod.take(4);
-        expect([...taken]).toEqual(expect.arrayContaining([0, 1, 2, 3]));
+        expect([...taken]).toEqual([0, 1, 2, 3]);
     });
     test("4 from 2", () => {
         const itmod = Itmod.range(0, 2);
         const taken = itmod.take(4);
-        expect([...taken]).toEqual(expect.arrayContaining([0, 1]));
+        expect([...taken]).toEqual([0, 1]);
     });
     test("4 from 2", () => {
         const itmod = Itmod.empty();
         const taken = itmod.take(4);
-        expect([...taken]).toEqual(expect.arrayContaining([]));
+        expect([...taken]).toEqual([]);
     });
     test("0 from 10", () => {
         const itmod = Itmod.range(0, 10);
         const taken = itmod.take(0);
-        expect([...taken]).toEqual(expect.arrayContaining([]));
+        expect([...taken]).toEqual([]);
     });
     test("inf from 10", () => {
         const itmod = Itmod.range(0, 10);
         const taken = itmod.take(Infinity);
-        expect([...taken]).toEqual(
-            expect.arrayContaining([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-        );
+        expect([...taken]).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
     });
 });
 
@@ -557,34 +520,32 @@ describe("skip", () => {
     test("4 from 10", () => {
         const itmod = Itmod.range(0, 10);
         const taken = itmod.skip(4);
-        expect([...taken]).toEqual(expect.arrayContaining([4, 5, 6, 7, 8, 9]));
+        expect([...taken]).toEqual([4, 5, 6, 7, 8, 9]);
     });
     test("4 from 4", () => {
         const itmod = Itmod.range(0, 4);
         const taken = itmod.skip(4);
-        expect([...taken]).toEqual(expect.arrayContaining([]));
+        expect([...taken]).toEqual([]);
     });
     test("4 from 2", () => {
         const itmod = Itmod.range(0, 2);
         const taken = itmod.skip(4);
-        expect([...taken]).toEqual(expect.arrayContaining([]));
+        expect([...taken]).toEqual([]);
     });
     test("4 from 0", () => {
         const itmod = Itmod.empty();
         const taken = itmod.skip(4);
-        expect([...taken]).toEqual(expect.arrayContaining([]));
+        expect([...taken]).toEqual([]);
     });
     test("0 from 10", () => {
         const itmod = Itmod.range(0, 10);
         const taken = itmod.skip(0);
-        expect([...taken]).toEqual(
-            expect.arrayContaining([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-        );
+        expect([...taken]).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
     });
     test("inf from 10", () => {
         const itmod = Itmod.range(0, 10);
         const taken = itmod.skip(Infinity);
-        expect([...taken]).toEqual(expect.arrayContaining([]));
+        expect([...taken]).toEqual([]);
     });
 });
 
@@ -592,34 +553,32 @@ describe("takeFinal", () => {
     test("4 from 10", () => {
         const itmod = Itmod.range(0, 10);
         const taken = itmod.takeFinal(4);
-        expect([...taken]).toEqual(expect.arrayContaining([6, 7, 8, 9]));
+        expect([...taken]).toEqual([6, 7, 8, 9]);
     });
     test("4 from 4", () => {
         const itmod = Itmod.range(0, 4);
         const taken = itmod.takeFinal(4);
-        expect([...taken]).toEqual(expect.arrayContaining([0, 1, 2, 3]));
+        expect([...taken]).toEqual([0, 1, 2, 3]);
     });
     test("4 from 2", () => {
         const itmod = Itmod.range(0, 2);
         const taken = itmod.takeFinal(4);
-        expect([...taken]).toEqual(expect.arrayContaining([0, 1]));
+        expect([...taken]).toEqual([0, 1]);
     });
     test("4 from 0", () => {
         const itmod = Itmod.empty();
         const taken = itmod.takeFinal(4);
-        expect([...taken]).toEqual(expect.arrayContaining([]));
+        expect([...taken]).toEqual([]);
     });
     test("0 from 10", () => {
         const itmod = Itmod.range(0, 10);
         const taken = itmod.takeFinal(0);
-        expect([...taken]).toEqual(expect.arrayContaining([]));
+        expect([...taken]).toEqual([]);
     });
     test("inf from 10", () => {
         const itmod = Itmod.range(0, 10);
         const taken = itmod.takeFinal(Infinity);
-        expect([...taken]).toEqual(
-            expect.arrayContaining([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-        );
+        expect([...taken]).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
     });
 });
 
@@ -627,34 +586,32 @@ describe("skipFinal", () => {
     test("4 from 10", () => {
         const itmod = Itmod.range(0, 10);
         const taken = itmod.skipFinal(4);
-        expect([...taken]).toEqual(expect.arrayContaining([0, 1, 2, 3, 4, 5]));
+        expect([...taken]).toEqual([0, 1, 2, 3, 4, 5]);
     });
     test("4 from 4", () => {
-        const itmod = Itmod.range(0, 4);
+        const itmod = Itmod.range(0, 4).collapse();
         const taken = itmod.skipFinal(4);
-        expect([...taken]).toEqual(expect.arrayContaining([]));
+        expect([...taken]).toEqual([]);
     });
     test("4 from 2", () => {
         const itmod = Itmod.range(0, 2);
         const taken = itmod.skipFinal(4);
-        expect([...taken]).toEqual(expect.arrayContaining([]));
+        expect([...taken]).toEqual([]);
     });
     test("4 from 0", () => {
         const itmod = Itmod.empty();
         const taken = itmod.skipFinal(4);
-        expect([...taken]).toEqual(expect.arrayContaining([]));
+        expect([...taken]).toEqual([]);
     });
     test("0 from 10", () => {
         const itmod = Itmod.range(0, 10);
         const taken = itmod.skipFinal(0);
-        expect([...taken]).toEqual(
-            expect.arrayContaining([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
-        );
+        expect([...taken]).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
     });
     test("inf from 10", () => {
         const itmod = Itmod.range(0, 10);
         const taken = itmod.skipFinal(Infinity);
-        expect([...taken]).toEqual(expect.arrayContaining([]));
+        expect([...taken]).toEqual([]);
     });
 });
 
@@ -742,12 +699,12 @@ describe("min", () => {
     test("4 of 2", () => {
         const itmod = Itmod.of(1, 0);
         const min = itmod.min(4);
-        expect([...min]).toEqual(expect.arrayContaining([0, 1]));
+        expect([...min]).toEqual([0, 1]);
     });
     test("4 of 0", () => {
         const itmod = Itmod.empty<number>();
         const min = itmod.min(4);
-        expect([...min]).toEqual(expect.arrayContaining([]));
+        expect([...min]).toEqual([]);
     });
     test("0 of 10", () => {
         const itmod = Itmod.of(
@@ -763,7 +720,7 @@ describe("min", () => {
             "51"
         );
         const min = itmod.min(0);
-        expect([...min]).toEqual(expect.arrayContaining([]));
+        expect([...min]).toEqual([]);
     });
 
     test("4n of 10", () => {
@@ -785,12 +742,12 @@ describe("min", () => {
     test("4n of 2", () => {
         const itmod = Itmod.of(1, 0);
         const min = itmod.min(4n);
-        expect([...min]).toEqual(expect.arrayContaining([0, 1]));
+        expect([...min]).toEqual([0, 1]);
     });
     test("4n of 0", () => {
         const itmod = Itmod.empty<number>();
         const min = itmod.min(4n);
-        expect([...min]).toEqual(expect.arrayContaining([]));
+        expect([...min]).toEqual([]);
     });
     test("0n of 10", () => {
         const itmod = Itmod.of(
@@ -806,7 +763,7 @@ describe("min", () => {
             "51"
         );
         const min = itmod.min(0n);
-        expect([...min]).toEqual(expect.arrayContaining([]));
+        expect([...min]).toEqual([]);
     });
 });
 
@@ -830,12 +787,12 @@ describe("max", () => {
     test("4 of 2", () => {
         const itmod = Itmod.of(1, 0);
         const max = itmod.max(4);
-        expect([...max]).toEqual(expect.arrayContaining([0, 1]));
+        expect([...max]).toEqual([0, 1]);
     });
     test("4 of 0", () => {
         const itmod = Itmod.empty<number>();
         const max = itmod.max(4);
-        expect([...max]).toEqual(expect.arrayContaining([]));
+        expect([...max]).toEqual([]);
     });
     test("0 of 10", () => {
         const itmod = Itmod.of(
@@ -851,7 +808,7 @@ describe("max", () => {
             "51"
         );
         const max = itmod.max(0);
-        expect([...max]).toEqual(expect.arrayContaining([]));
+        expect([...max]).toEqual([]);
     });
 
     test("4n of 10", () => {
@@ -873,12 +830,12 @@ describe("max", () => {
     test("4n of 2", () => {
         const itmod = Itmod.of(1, 0);
         const max = itmod.max(4n);
-        expect([...max]).toEqual(expect.arrayContaining([0, 1]));
+        expect([...max]).toEqual([0, 1]);
     });
     test("4n of 0", () => {
         const itmod = Itmod.empty<number>();
         const max = itmod.max(4n);
-        expect([...max]).toEqual(expect.arrayContaining([]));
+        expect([...max]).toEqual([]);
     });
     test("0n of 10", () => {
         const itmod = Itmod.of(
@@ -894,7 +851,7 @@ describe("max", () => {
             "51"
         );
         const max = itmod.max(0n);
-        expect([...max]).toEqual(expect.arrayContaining([]));
+        expect([...max]).toEqual([]);
     });
 });
 
@@ -913,21 +870,23 @@ describe("groupBy", () => {
     describe("without Group selector", () => {
         const grouped = itmod.groupBy((foo) => foo.state);
         test("correct order of keys", () => {
-            expect([...grouped.map((g) => g[0])]).toEqual(
-                expect.arrayContaining(["mt", "wa", "fl"])
-            );
+            expect([...grouped.map((g) => g[0])]).toEqual(["mt", "wa", "fl"]);
         });
         test("correct order in groups", () => {
             const map = grouped.toMap();
-            expect(map.get("mt")!.map((c) => c.name)).toEqual(
-                expect.arrayContaining(["phillip", "susan", "john", "arnold"])
-            );
-            expect(map.get("wa")!.map((c) => c.name)).toEqual(
-                expect.arrayContaining(["james", "steve", "charlie", "florida"])
-            );
-            expect(map.get("fl")!.map((c) => c.name)).toEqual(
-                expect.arrayContaining(["samantha"])
-            );
+            expect(map.get("mt")!.map((c) => c.name)).toEqual([
+                "phillip",
+                "susan",
+                "john",
+                "arnold",
+            ]);
+            expect(map.get("wa")!.map((c) => c.name)).toEqual([
+                "james",
+                "steve",
+                "charlie",
+                "florida",
+            ]);
+            expect(map.get("fl")!.map((c) => c.name)).toEqual(["samantha"]);
         });
     });
     describe("with group selector", () => {
@@ -936,9 +895,7 @@ describe("groupBy", () => {
             (group) => group.map((c) => c.name).join()
         );
         test("correct order of keys", () => {
-            expect([...grouped.map((g) => g[0])]).toEqual(
-                expect.arrayContaining(["mt", "wa", "fl"])
-            );
+            expect([...grouped.map((g) => g[0])]).toEqual(["mt", "wa", "fl"]);
         });
         test("correct order in groups", () => {
             const map = grouped.toMap();
@@ -958,9 +915,7 @@ describe("toArray", () => {
     test("finite items doesn't throw an error", () => {
         expect(() => {
             const itmod = Itmod.of(1, 3, 4, 5, 42, 5, 76, 7);
-            expect(itmod.toArray()).toEqual(
-                expect.arrayContaining([1, 3, 4, 5, 42, 5, 76, 7])
-            );
+            expect(itmod.toArray()).toEqual([1, 3, 4, 5, 42, 5, 76, 7]);
         });
     });
 });
@@ -974,6 +929,9 @@ describe("toSet", () => {
     test("finite items doesn't throw an error", () => {
         expect(() => {
             const itmod = Itmod.of(1, 3, 4, 5, 42, 5, 76, 7);
+            expect([...itmod.toSet()]).toEqual(
+                expect.arrayContaining([1, 3, 4, 5, 42, 5, 76, 7])
+            );
             expect(itmod.toSet().size).toBe(8);
         });
     });
@@ -988,9 +946,7 @@ describe("asArray", () => {
     test("finite items doesn't throw an error", () => {
         expect(() => {
             const itmod = Itmod.of(1, 3, 4, 5, 42, 5, 76, 7);
-            expect(itmod.toArray()).toEqual(
-                expect.arrayContaining([1, 3, 4, 5, 42, 5, 76, 7])
-            );
+            expect(itmod.toArray()).toEqual([1, 3, 4, 5, 42, 5, 76, 7]);
         });
     });
 });
@@ -1004,8 +960,353 @@ describe("asSet", () => {
     test("finite items doesn't throw an error", () => {
         expect(() => {
             const itmod = Itmod.of(1, 3, 4, 5, 42, 5, 76, 7);
+            expect([...itmod.asSet()]).toEqual(
+                expect.arrayContaining([1, 3, 4, 5, 42, 5, 76, 7])
+            );
             expect(itmod.asSet().size).toBe(8);
         });
+    });
+});
+
+describe("sort", () => {
+    const itmod = Itmod.of(
+        "23",
+        "12",
+        "54",
+        "65",
+        "67",
+        "8",
+        "17",
+        "20",
+        "20",
+        "31",
+        "45",
+        "23",
+        "75",
+        "65",
+        "62",
+        "68",
+        "90",
+        "23",
+        "12",
+        "13",
+        "15",
+        "21",
+        "5",
+        "3",
+        "4",
+        "5",
+        "8",
+        "2",
+        "7",
+        "43",
+        "5"
+    );
+
+    test("with default comparator", () => {
+        const sorted = itmod.sort();
+        expect([...sorted]).toEqual([
+            "12",
+            "12",
+            "13",
+            "15",
+            "17",
+            "2",
+            "20",
+            "20",
+            "21",
+            "23",
+            "23",
+            "23",
+            "3",
+            "31",
+            "4",
+            "43",
+            "45",
+            "5",
+            "5",
+            "5",
+            "54",
+            "62",
+            "65",
+            "65",
+            "67",
+            "68",
+            "7",
+            "75",
+            "8",
+            "8",
+            "90",
+        ]);
+    });
+    test("with custom comparator", () => {
+        const sorted = itmod.sort((n) => parseInt(n));
+        expect([...sorted]).toEqual([
+            "2",
+            "3",
+            "4",
+            "5",
+            "5",
+            "5",
+            "7",
+            "8",
+            "8",
+            "12",
+            "12",
+            "13",
+            "15",
+            "17",
+            "20",
+            "20",
+            "21",
+            "23",
+            "23",
+            "23",
+            "31",
+            "43",
+            "45",
+            "54",
+            "62",
+            "65",
+            "65",
+            "67",
+            "68",
+            "75",
+            "90",
+        ]);
+    });
+    test("with multiple custom comparators", () => {
+        const itmod = Itmod.of(
+            { state: "mt", firstName: "phillip", lastName: "grass", age: 5 },
+            { state: "wa", firstName: "james", lastName: "bond", age: 10 },
+            { state: "mt", firstName: "susan", lastName: "anthony", age: 40 },
+            { state: "fl", firstName: "samantha", lastName: "jones", age: 12 },
+            { state: "mt", firstName: "john", lastName: "john", age: 90 },
+            {
+                state: "mt",
+                firstName: "arnold",
+                lastName: "terminator",
+                age: 90,
+            },
+            { state: "wa", firstName: "steve", lastName: "grand", age: 20 },
+            { state: "wa", firstName: "charlie", lastName: "brown", age: 30 },
+            { state: "wa", firstName: "florida", lastName: "man", age: 40 }
+        );
+
+        const sorted = itmod.sort(
+            (a: any, b: any) => autoComparator(a.state, b.state),
+            "firstName",
+            (c: any) => c.lastName,
+            "age"
+        );
+        expect(sorted.map((c) => c.state).toArray()).toEqual([
+            "fl",
+            "mt",
+            "mt",
+            "mt",
+            "mt",
+            "wa",
+            "wa",
+            "wa",
+            "wa",
+        ]);
+        expect(sorted.map((c) => c.firstName).toArray()).toEqual([
+            "samantha",
+            "arnold",
+            "john",
+            "phillip",
+            "susan",
+            "charlie",
+            "florida",
+            "james",
+            "steve",
+        ]);
+        expect(sorted.map((c) => c.lastName).toArray()).toEqual([
+            "jones",
+            "terminator",
+            "john",
+            "grass",
+            "anthony",
+            "brown",
+            "man",
+            "bond",
+            "grand",
+        ]);
+        expect(sorted.map((c) => c.age).toArray()).toEqual([
+            12, 90, 90, 5, 40, 30, 40, 10, 20,
+        ]);
+    });
+});
+
+describe("sortDescending", () => {
+    const itmod = Itmod.of(
+        "23",
+        "12",
+        "54",
+        "65",
+        "67",
+        "8",
+        "17",
+        "20",
+        "20",
+        "31",
+        "45",
+        "23",
+        "75",
+        "65",
+        "62",
+        "68",
+        "90",
+        "23",
+        "12",
+        "13",
+        "15",
+        "21",
+        "5",
+        "3",
+        "4",
+        "5",
+        "8",
+        "2",
+        "7",
+        "43",
+        "5"
+    );
+
+    test("with default comparator", () => {
+        const sorted = itmod.sortDescending().reverse();
+        expect([...sorted]).toEqual([
+            "12",
+            "12",
+            "13",
+            "15",
+            "17",
+            "2",
+            "20",
+            "20",
+            "21",
+            "23",
+            "23",
+            "23",
+            "3",
+            "31",
+            "4",
+            "43",
+            "45",
+            "5",
+            "5",
+            "5",
+            "54",
+            "62",
+            "65",
+            "65",
+            "67",
+            "68",
+            "7",
+            "75",
+            "8",
+            "8",
+            "90",
+        ]);
+    });
+    test("with custom comparator", () => {
+        const sorted = itmod.sortDescending((n) => parseInt(n)).reverse();
+        expect([...sorted]).toEqual([
+            "2",
+            "3",
+            "4",
+            "5",
+            "5",
+            "5",
+            "7",
+            "8",
+            "8",
+            "12",
+            "12",
+            "13",
+            "15",
+            "17",
+            "20",
+            "20",
+            "21",
+            "23",
+            "23",
+            "23",
+            "31",
+            "43",
+            "45",
+            "54",
+            "62",
+            "65",
+            "65",
+            "67",
+            "68",
+            "75",
+            "90",
+        ]);
+    });
+    test("with multiple custom comparators", () => {
+        const itmod = Itmod.of(
+            { state: "mt", firstName: "phillip", lastName: "grass", age: 5 },
+            { state: "wa", firstName: "james", lastName: "bond", age: 10 },
+            { state: "mt", firstName: "susan", lastName: "anthony", age: 40 },
+            { state: "fl", firstName: "samantha", lastName: "jones", age: 12 },
+            { state: "mt", firstName: "john", lastName: "john", age: 90 },
+            {
+                state: "mt",
+                firstName: "arnold",
+                lastName: "terminator",
+                age: 90,
+            },
+            { state: "wa", firstName: "steve", lastName: "grand", age: 20 },
+            { state: "wa", firstName: "charlie", lastName: "brown", age: 30 },
+            { state: "wa", firstName: "florida", lastName: "man", age: 40 }
+        );
+
+        const sorted = itmod
+            .sortDescending(
+                (a: any, b: any) => autoComparator(a.state, b.state),
+                "firstName",
+                (c: any) => c.lastName,
+                "age"
+            )
+            .reverse();
+        expect(sorted.map((c) => c.state).toArray()).toEqual([
+            "fl",
+            "mt",
+            "mt",
+            "mt",
+            "mt",
+            "wa",
+            "wa",
+            "wa",
+            "wa",
+        ]);
+        expect(sorted.map((c) => c.firstName).toArray()).toEqual([
+            "samantha",
+            "arnold",
+            "john",
+            "phillip",
+            "susan",
+            "charlie",
+            "florida",
+            "james",
+            "steve",
+        ]);
+        expect(sorted.map((c) => c.lastName).toArray()).toEqual([
+            "jones",
+            "terminator",
+            "john",
+            "grass",
+            "anthony",
+            "brown",
+            "man",
+            "bond",
+            "grand",
+        ]);
+        expect(sorted.map((c) => c.age).toArray()).toEqual([
+            12, 90, 90, 5, 40, 30, 40, 10, 20,
+        ]);
     });
 });
 
