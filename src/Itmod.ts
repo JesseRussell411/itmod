@@ -1,5 +1,6 @@
 import CircularBuffer from "./collections/CircularBuffer";
 import Collection from "./collections/Collection";
+import LinkedList from "./collections/LinkedList";
 import SortedSequence from "./collections/SortedSequence";
 import { asArray, asIterable, asSet } from "./collections/as";
 import { isArray, isArrayAsWritable, isSetAsWritable } from "./collections/is";
@@ -13,6 +14,7 @@ import { toArray, toSet } from "./collections/to";
 import NeverEndingOperationError from "./errors/NeverEndingOperationError";
 import { identity, resultOf, returns } from "./functional/functions";
 import {
+    requireGreaterThanZero,
     requireIntegerOrInfinity,
     requireNonNegative,
     requireSafeInteger,
@@ -32,20 +34,8 @@ import MapEntryLike from "./types/MapEntryLike";
 import { General } from "./types/literals";
 
 // TODO unit tests
-// TODO unit tests
-// TODO unit tests
-// TODO unit tests
-// TODO unit tests
-// TODO unit tests
-// TODO unit tests
-// TODO unit tests
-// TODO unit tests
-// TODO unit tests
-// TODO unit tests
 
-// TODO unit tests
-
-// TODO groupby join, leftjoin, groupjoin
+// TODO join, leftjoin, groupjoin, takeSparse, skipSparse
 export type Comparison =
     | "equals"
     | "lessThan"
@@ -330,17 +320,10 @@ export default class Itmod<T> implements Iterable<T> {
      */
     public get map() {
         const self = this;
-        return function map<R>(mapping: (value: T, index: number) => R) {
-            return new Itmod(
-                { infinite: self.properties.infinite },
-                function* () {
-                    let i = 0;
-                    for (const value of self) {
-                        yield mapping(value, i);
-                        i++;
-                    }
-                }
-            );
+        return function map<R>(
+            mapping: (value: T, index: number) => R
+        ): MappedItmod<T, R> {
+            return new MappedItmod(self.properties, self.getSource, mapping);
         };
     }
 
@@ -570,6 +553,17 @@ export default class Itmod<T> implements Iterable<T> {
     }
 
     /**
+     * @returns The first item or undefined if the source is empty.
+     */
+    public get first() {
+        const self = this;
+        return function first() {
+            for (const item of self) return item;
+            return undefined;
+        };
+    }
+
+    /**
      * Keeps the first given number of items, skipping the rest.
      */
     public get take() {
@@ -621,19 +615,79 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
-    // /**
-    //  * @deprecated not implemented yet
-    //  */
-    // public get takeSparse() {
-    //     throw new NotImplementedError();
-    // }
+    public get takeEveryNth() {
+        const externalTakeEveryNth = takeEveryNth;
+        const self = this;
+        return function takeEveryNth(n: number | bigint): Itmod<T> {
+            return new Itmod<T>(
+                { infinite: self.properties.infinite && n !== Infinity },
+                () => externalTakeEveryNth(n, self.getSource())
+            );
+        };
+    }
 
-    // /**
-    //  * @deprecated not implemented yet
-    //  */
-    // public get skipSparse() {
-    //     throw new NotImplementedError();
-    // }
+    public get takeWhile() {
+        const externalTakeWhile = takeWhile;
+        const self = this;
+        return function takeWhile(
+            condition: (item: T, index: number) => boolean
+        ): Itmod<T> {
+            return new Itmod({}, () =>
+                externalTakeWhile(self.getSource(), condition)
+            );
+        };
+    }
+    public get takeRandom() {
+        const externalTakeRandom = takeRandom;
+        const self = this;
+        return function takeRandom(
+            count: number | bigint,
+            getRandomInt?: (upperBound: number) => number
+        ) {
+            requireIntegerOrInfinity(requireNonNegative(count));
+            return new Itmod(
+                { infinite: self.properties.infinite && count === Infinity },
+                () => externalTakeRandom(count, self.getSource(), getRandomInt)
+            );
+        };
+    }
+
+    public get skipEveryNth() {
+        const externalSkipEveryNth = skipEveryNth;
+        const self = this;
+        return function skipEveryNth(n: number | bigint): Itmod<T> {
+            return new Itmod<T>({ infinite: self.properties.infinite }, () =>
+                externalSkipEveryNth(n, self.getSource())
+            );
+        };
+    }
+
+    public get skipWhile() {
+        const externalSkipWhile = skipWhile;
+        const self = this;
+        return function skipWhile(
+            condition: (item: T, index: number) => boolean
+        ): Itmod<T> {
+            return new Itmod({}, () =>
+                externalSkipWhile(self.getSource(), condition)
+            );
+        };
+    }
+
+    public get skipRandom() {
+        const externalSkipRandom = skipRandom;
+        const self = this;
+        return function skipRandom(
+            count: number | bigint,
+            getRandomInt?: (upperBound: number) => number
+        ) {
+            requireIntegerOrInfinity(requireNonNegative(count));
+            return new Itmod(
+                { infinite: self.properties.infinite && count === Infinity },
+                () => externalSkipRandom(count, self.getSource(), getRandomInt)
+            );
+        };
+    }
 
     /**
      * Attempts to determine how many items are in the {@link Iterable} without iterating it.
@@ -1276,6 +1330,119 @@ export class SortedItmod<T> extends Itmod<T> {
             return self.max(count, self.comparator);
         };
     }
+
+    // TODO skip and skipFinal
+}
+
+/**
+ * {@link Itmod} With a mapping applied to its items. The result of {@link Itmod.map}.
+ */
+export class MappedItmod<T, R> extends Itmod<R> {
+    protected readonly mapping: (value: T, index: number) => R;
+    protected readonly originalGetSource: () => Iterable<T>;
+    protected readonly originalProperties: ItmodProperties<T>;
+
+    public constructor(
+        properties: ItmodProperties<T>,
+        getSource: () => Iterable<T>,
+        mapping: (value: T, index: number) => R
+    ) {
+        super({ infinite: properties.infinite }, function* () {
+            const source = getSource();
+            let i = 0;
+            for (const value of source) {
+                yield mapping(value, i);
+                i++;
+            }
+        });
+        this.mapping = mapping;
+        this.originalGetSource = getSource;
+        this.originalProperties = properties;
+    }
+
+    public get skip() {
+        const self = this;
+        const externalSkip = skip;
+        return function skip(count: number | bigint) {
+            return new MappedItmod(
+                self.originalProperties,
+                () => externalSkip(count, self.originalGetSource()),
+                self.mapping
+            );
+        };
+    }
+
+    public get takeFinal() {
+        const self = this;
+        const externalTakeFinal = takeFinal;
+        return function takeFinal(count: number | bigint) {
+            return new MappedItmod(
+                self.originalProperties,
+                () => externalTakeFinal(count, self.originalGetSource()),
+                self.mapping
+            );
+        };
+    }
+
+    public get skipFinal() {
+        const self = this;
+        const externalSkipFinal = skipFinal;
+        return function skipFinal(count: number | bigint) {
+            return new MappedItmod(
+                self.originalProperties,
+                () => externalSkipFinal(count, self.originalGetSource()),
+                self.mapping
+            );
+        };
+    }
+
+    public get takeEveryNth() {
+        const self = this;
+        const externalTakeEveryNth = takeEveryNth;
+        return function takeEveryNth(count: number | bigint) {
+            return new MappedItmod(
+                self.originalProperties,
+                () => externalTakeEveryNth(count, self.originalGetSource()),
+                self.mapping
+            );
+        };
+    }
+
+    public get takeRandom() {
+        const self = this;
+        const externalTakeRandom = takeRandom;
+        return function takeRandom(count: number | bigint) {
+            return new MappedItmod(
+                self.originalProperties,
+                () => externalTakeRandom(count, self.originalGetSource()),
+                self.mapping
+            );
+        };
+    }
+
+    public get skipEveryNth() {
+        const self = this;
+        const externalSkipEveryNth = skipEveryNth;
+        return function skipEveryNth(count: number | bigint) {
+            return new MappedItmod(
+                self.originalProperties,
+                () => externalSkipEveryNth(count, self.originalGetSource()),
+                self.mapping
+            );
+        };
+    }
+
+    public get skipRandom() {
+        const self = this;
+        const externalSkipRandom = skipRandom;
+        return function skipRandom(count: number | bigint) {
+            return new MappedItmod(
+                self.originalProperties,
+                () => externalSkipRandom(count, self.originalGetSource()),
+                self.mapping
+            );
+        };
+    }
 }
 
 const _emptyItmod = new Itmod<any>({}, returns(emptyIterable()));
@@ -1382,6 +1549,120 @@ function skipFinal<T>(
     };
 }
 
+function takeEveryNth<T>(n: number | bigint, source: Iterable<T>): Iterable<T> {
+    requireIntegerOrInfinity(requireGreaterThanZero(n));
+    if (n === Infinity) return emptyIterable();
+    if (isOne(n)) return source;
+
+    return {
+        *[Symbol.iterator]() {
+            let i = zeroLike(n);
+            for (const item of source) {
+                i++;
+                if (i >= n) {
+                    yield item;
+                    i = zeroLike(n);
+                }
+            }
+        },
+    };
+}
+
+function takeWhile<T>(
+    source: Iterable<T>,
+    condition: (item: T, index: number) => boolean
+) {
+    return {
+        *[Symbol.iterator]() {
+            let i = 0;
+            for (const item of source) {
+                if (!condition(item, i)) break;
+                yield item;
+                i++;
+            }
+        },
+    };
+}
+
+function takeRandom<T>(
+    count: number | bigint,
+    source: Iterable<T>,
+    getRandomInt?: (upperBound: number) => number
+): Iterable<T> {
+    requireIntegerOrInfinity(requireNonNegative(count));
+    if (isZero(count)) return emptyIterable();
+
+    const shuffled = [...source];
+    fisherYatesShuffle(shuffled, getRandomInt);
+
+    return take(count, shuffled);
+}
+
+function skipEveryNth<T>(n: number | bigint, source: Iterable<T>): Iterable<T> {
+    requireIntegerOrInfinity(requireGreaterThanZero(n));
+    if (n === Infinity) return source;
+    if (isOne(n)) return emptyIterable();
+
+    return {
+        *[Symbol.iterator]() {
+            let i = zeroLike(n);
+            for (const item of source) {
+                i++;
+                if (i >= n) {
+                    i = zeroLike(n);
+                } else {
+                    yield item;
+                }
+            }
+        },
+    };
+}
+
+function skipWhile<T>(
+    source: Iterable<T>,
+    condition: (item: T, index: number) => boolean
+) {
+    return {
+        *[Symbol.iterator]() {
+            const iterator = source[Symbol.iterator]();
+
+            let next = iterator.next();
+            let i = 0;
+            while (!next.done) {
+                if (!condition(next.value, i)) break;
+                next = iterator.next();
+                i++;
+            }
+
+            while (!next.done) {
+                yield next.value;
+                next = iterator.next();
+            }
+        },
+    };
+}
+
+function skipRandom<T>(
+    count: number | bigint,
+    source: Iterable<T>,
+    getRandomInt?: (upperBound: number) => number
+): Iterable<T> {
+    requireIntegerOrInfinity(requireNonNegative(count));
+    if (count === Infinity) return emptyIterable();
+    if (isZero(count)) return source;
+
+    const nonIteratedCount = nonIteratedCountOrUndefined(source);
+    if (nonIteratedCount !== undefined && count >= nonIteratedCount) {
+        return emptyIterable();
+    }
+
+    const shuffled = [...source];
+    if (count >= shuffled.length) return emptyIterable();
+    fisherYatesShuffle(shuffled, getRandomInt);
+
+    return take(shuffled.length - Number(count), shuffled);
+}
+
 /**
  * @returns 0n if the input is a bigint; 0 if the input is a number;
  */
@@ -1391,6 +1672,14 @@ function zeroLike<N extends number | bigint>(n: N): N extends number ? 0 : 0n {
     } else {
         return 0n as any;
     }
+}
+
+function isZero(n: number | bigint): n is 0 | 0n {
+    return n === 0 || n === 0n;
+}
+
+function isOne(n: number | bigint): n is 1 | 0n {
+    return n === 1 || n === 1n;
 }
 
 function isSolid<T>(iterable: Iterable<T>): boolean {
