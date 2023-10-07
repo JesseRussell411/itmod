@@ -17,7 +17,7 @@ export type Field<T> = keyof T;
 /**
  * Represents an ordering of values of type T.
  */
-export type Order<T> = Comparator<T> | FieldSelector<T>  | Field<T>;
+export type Order<T> = Comparator<T> | FieldSelector<T> | Field<T>;
 
 /**
  * @returns Whether the given {@link Order} is represented by a {@link Comparator}.
@@ -58,6 +58,7 @@ export function cmpGT(comparatorResult: number): boolean {
  * @returns Whether the given {@link Comparator} result signifies an "equal to" relationship.
  */
 export function cmpEQ(comparatorResult: number): boolean {
+    // cannot just use === 0 because the result could be NaN, which signifies equal, or at least not greater than or less than
     return !(comparatorResult < 0 || comparatorResult > 0);
 }
 
@@ -65,6 +66,7 @@ export function cmpEQ(comparatorResult: number): boolean {
  * @returns Whether the given {@link Comparator} result signifies a "not equal to" relationship.
  */
 export function cmpNQ(comparatorResult: number): boolean {
+    // cannot just use !== 0 because the result could be NaN, which signifies equal, or at least not greater than or less than
     return comparatorResult < 0 || comparatorResult > 0;
 }
 
@@ -72,6 +74,7 @@ export function cmpNQ(comparatorResult: number): boolean {
  * @returns Whether the given {@link Comparator} result signifies a "less than or equal to" relationship.
  */
 export function cmpLE(comparatorResult: number): boolean {
+    // cannot just use <= 0 because the result could be NaN, which signifies equal, or at least not greater than or less than
     return comparatorResult < 0 || !(comparatorResult > 0);
 }
 
@@ -79,6 +82,7 @@ export function cmpLE(comparatorResult: number): boolean {
  * @returns Whether the given {@link Comparator} result signifies a "greater than or equal to" relationship.
  */
 export function cmpGE(comparatorResult: number): boolean {
+    // cannot just use >= 0 because the result could be NaN, which signifies equal, or at least not greater than or less than
     return comparatorResult > 0 || !(comparatorResult < 0);
 }
 
@@ -117,19 +121,19 @@ export const autoComparator: Comparator<unknown> = (
 ): number => {
     // TYPE IDs:
 
-    // undefined* -- 0
-    // null       -- 1
-    // boolean,Boolean    -- 2
+    // undefined*      -- 0
+    // null            -- 1
+    // boolean,Boolean -- 2
 
-    // number,Number    -- 3
-    // bigint,Bigint     -- 3
+    // number,Number -- 3
+    // bigint,Bigint -- 3
 
-    // string,String     -- 4
-    // symbol,Symbol     -- 5
-    // Date       -- 6
-    // Array      -- 7
-    // object     -- 8
-    // function   -- 9
+    // string,String -- 4
+    // symbol,Symbol -- 5
+    // Date          -- 6
+    // Array         -- 7
+    // object        -- 8
+    // function      -- 9
 
     // type
     const typeIdA = idType(a);
@@ -187,6 +191,8 @@ export const autoComparator: Comparator<unknown> = (
 
         // date
         case 6:
+            // TODO figure out best way to compare dates
+            // like, does this take time zones into account?
             return (a as Date).getTime() - (b as Date).getTime();
 
         // array
@@ -237,10 +243,12 @@ export const autoComparator: Comparator<unknown> = (
                 // TODO find more efficient way of doing this. Some way of getting base most prototype maybe?
                 if (item instanceof Date) return 6;
                 if (Array.isArray(item)) return 7;
-                if (item instanceof Boolean) return 2;
-                if (item instanceof Number) return 3;
-                if (item instanceof BigInt) return 3;
                 if (item instanceof String) return 4;
+                if (item instanceof Number) return 3;
+                if (item instanceof Boolean) return 2;
+                if (item instanceof BigInt) return 3;
+
+                // just some object
                 return 8;
 
             case "function":
@@ -250,24 +258,15 @@ export const autoComparator: Comparator<unknown> = (
 };
 
 /**
- * Reverses the given order so that, in comparator form, a positive number is returned when a negative number would have been and vice versa.
+ * Cache for storing reversals so they can be un-reversed later.
+ *
+ * so that you don't end up with this:
+ * ```
+ * (a, b) => ((a, b) => ((a, b) => ((a, b) => ((a, b) => comparator(b, a))(b, a))(b, a))(b, a))(b, a)
+ * ```
+ * from doing multiple reversals and un reversals
  */
-export function reverseOrder<T>(order: Order<T>): Order<T> {
-    // check cache
-    if (order instanceof Object) {
-        const fromCache = reversedOrderCache.get(order);
-        if (fromCache !== undefined) return fromCache as any;
-    }
-
-    const comparator = asComparator(order);
-
-    const reversed = (a: T, b: T) => comparator(b, a);
-    // store original in cache so that the order can be efficiently un-reversed later
-    reversedOrderCache.set(reversed, order);
-    return reversed;
-}
-
-const reversedOrderCache = new WeakMap<Order<any> & object, Order<any>>();
+const reversedComparatorCache = new WeakMap<Comparator<any>, Comparator<any>>();
 
 /**
  * Reverses the given comparator so that a positive number is returned when a negative number would have been and vice versa.
@@ -279,10 +278,17 @@ export function reverseComparator<T>(comparator: Comparator<T>): Comparator<T> {
 
     const reversed = (a: T, b: T) => comparator(b, a);
     // store original in cache so that the comparator can be efficiently un-reversed later
+
     reversedComparatorCache.set(reversed, comparator);
+
     // don't do this: cache.set(comparator, reversed); because that would create a circular link island in the weakmap and a memory leak
 
     return reversed;
 }
 
-const reversedComparatorCache = new WeakMap<Comparator<any>, Comparator<any>>();
+/**
+ * Reverses the given order so that, in comparator form, a positive number is returned when a negative number would have been and vice versa.
+ */
+export function reverseOrder<T>(order: Order<T>): Order<T> {
+    return reverseComparator(asComparator(order));
+}

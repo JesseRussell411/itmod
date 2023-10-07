@@ -483,6 +483,7 @@ describe("repeat", () => {
     });
 });
 
+// TODO bigint tests
 describe("take", () => {
     test("4 from 10", () => {
         const itmod = Itmod.range(0, 10);
@@ -612,6 +613,178 @@ describe("skipFinal", () => {
         const itmod = Itmod.range(0, 10);
         const taken = itmod.skipFinal(Infinity);
         expect([...taken]).toEqual([]);
+    });
+});
+
+describe("takeEveryNth", () => {
+    test("1 of 10", () => {
+        expect(Itmod.range(1, 11).takeEveryNth(1).toArray()).toEqual([
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        ]);
+    });
+    test("2 of 10", () => {
+        expect(Itmod.range(1, 11).takeEveryNth(2).toArray()).toEqual([
+            2, 4, 6, 8, 10,
+        ]);
+    });
+    test("3 of 10", () => {
+        expect(Itmod.range(1, 11).takeEveryNth(3).toArray()).toEqual([3, 6, 9]);
+    });
+    test("4 of 10", () => {
+        expect(Itmod.range(1, 11).takeEveryNth(4).toArray()).toEqual([4, 8]);
+    });
+    test("5 of 10", () => {
+        expect(Itmod.range(1, 11).takeEveryNth(5).toArray()).toEqual([5, 10]);
+    });
+    test("10 0f 10", () => {
+        expect(Itmod.range(1, 11).takeEveryNth(10).toArray()).toEqual([10]);
+    });
+    test("11 of 10", () => {
+        expect(Itmod.range(1, 11).takeEveryNth(11).toArray()).toEqual([]);
+    });
+    test("inf of 10", () => {
+        expect(Itmod.range(1, 11).takeEveryNth(Infinity).toArray()).toEqual([]);
+    });
+});
+
+describe("skipEveryNth", () => {
+    test("1 of 10", () => {
+        expect(Itmod.range(1, 11).skipEveryNth(1).toArray()).toEqual([]);
+    });
+    test("2 of 10", () => {
+        expect(Itmod.range(1, 11).skipEveryNth(2).toArray()).toEqual([
+            1, 3, 5, 7, 9,
+        ]);
+    });
+    test("3 of 10", () => {
+        expect(Itmod.range(1, 11).skipEveryNth(3).toArray()).toEqual([
+            1, 2, 4, 5, 7, 8, 10,
+        ]);
+    });
+    test("4 of 10", () => {
+        expect(Itmod.range(1, 11).skipEveryNth(4).toArray()).toEqual([
+            1, 2, 3, 5, 6, 7, 9, 10,
+        ]);
+    });
+    test("5 of 10", () => {
+        expect(Itmod.range(1, 11).skipEveryNth(5).toArray()).toEqual([
+            1, 2, 3, 4, 6, 7, 8, 9,
+        ]);
+    });
+    test("10 0f 10", () => {
+        expect(Itmod.range(1, 11).skipEveryNth(10).toArray()).toEqual([
+            1, 2, 3, 4, 5, 6, 7, 8, 9,
+        ]);
+    });
+    test("11 of 10", () => {
+        expect(Itmod.range(1, 11).skipEveryNth(11).toArray()).toEqual([
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        ]);
+    });
+    test("inf of 10", () => {
+        expect(Itmod.range(1, 11).skipEveryNth(Infinity).toArray()).toEqual([
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        ]);
+    });
+});
+
+describe("takeWhile", () => {
+    test("always true", () => {
+        expect(
+            Itmod.range(1, 11)
+                .takeWhile(() => true)
+                .toArray()
+        ).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    });
+    test("always false", () => {
+        expect(
+            Itmod.range(1, 11)
+                .takeWhile(() => false)
+                .toArray()
+        ).toEqual([]);
+    });
+    test("true until 4", () => {
+        expect(
+            Itmod.range(1, 11)
+                .takeWhile((n) => n !== 4)
+                .toArray()
+        ).toEqual([1, 2, 3]);
+    });
+    test("true until index 4", () => {
+        expect(
+            Itmod.range(1, 11)
+                .takeWhile((_, i) => i !== 4)
+                .toArray()
+        ).toEqual([1, 2, 3, 4]);
+    });
+});
+
+describe("skipWhile", () => {
+    test("always true", () => {
+        expect(
+            Itmod.range(1, 11)
+                .skipWhile(() => true)
+                .toArray()
+        ).toEqual([]);
+    });
+    test("always false", () => {
+        expect(
+            Itmod.range(1, 11)
+                .skipWhile(() => false)
+                .toArray()
+        ).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+    });
+    test("true until 4", () => {
+        expect(
+            Itmod.range(1, 11)
+                .skipWhile((n) => n !== 4)
+                .toArray()
+        ).toEqual([4, 5, 6, 7, 8, 9, 10]);
+    });
+    test("true until index 4", () => {
+        expect(
+            Itmod.range(1, 11)
+                .skipWhile((_, i) => i !== 4)
+                .toArray()
+        ).toEqual([5, 6, 7, 8, 9, 10]);
+    });
+});
+
+describe("takeRandom", () => {
+    test("0 from 10", () => {
+        expect(Itmod.range(1, 11).takeRandom(0).toArray()).toEqual([]);
+    });
+    test("4 from 10", () => {
+        expect(Itmod.range(1, 11).takeRandom(4).count()).toBe(4);
+    });
+    test("5 from 10", () => {
+        expect(Itmod.range(1, 11).takeRandom(5).count()).toBe(5);
+    });
+    test("15 from 10", () => {
+        expect(Itmod.range(1, 11).takeRandom(15).count()).toBe(10);
+    });
+    test("results are unique", () => {
+        expect(Itmod.range(1, 11).takeRandom(5).distinct().count()).toBe(5);
+    });
+});
+
+describe("skipRandom", () => {
+    test("0 from 10", () => {
+        expect(Itmod.range(1, 11).skipRandom(0).toArray()).toEqual([
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        ]);
+    });
+    test("4 from 10", () => {
+        expect(Itmod.range(1, 11).skipRandom(4).count()).toBe(6);
+    });
+    test("5 from 10", () => {
+        expect(Itmod.range(1, 11).skipRandom(5).count()).toBe(5);
+    });
+    test("15 from 10", () => {
+        expect(Itmod.range(1, 11).skipRandom(15).count()).toBe(0);
+    });
+    test("results are unique", () => {
+        expect(Itmod.range(1, 11).skipRandom(5).distinct().count()).toBe(5);
     });
 });
 
@@ -1550,4 +1723,15 @@ describe("sequenceEqual", () => {
     });
 });
 
-//TODO test for every method in itmod and its children
+// TODO test for every method in itmod and its children
+// TODO tests for includes, some, every, distinct, defined, notNull, zip, including, makeString, flat, split, partitionBySize
+
+/*
+ * TODO list of optimized special cases to test
+ * - take from fresh array
+ * - takeWhile from fresh array
+ * - groupBy then toMap
+ * - partitionBySize with infinity, with fresh array and without
+ * -
+ *
+ */

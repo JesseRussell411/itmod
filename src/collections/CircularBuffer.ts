@@ -5,13 +5,18 @@ import Collection from "./Collection";
  * Buffer of limited size that can shift, unshift, push, and pop elements equally efficiently. Elements can be added until the maximum size is reached; whereupon, elements on the opposite side of the buffer are removed to make room.
  */
 export default class CircularBuffer<T> extends Collection<T> {
+    /** Where to store the buffer's contents. */
     private data: (T | undefined)[];
+    /** Location of index 0 in data. */
     private offset: number;
+    /** How many items are stored in the buffer. */
     private _size: number;
 
+    /** How many items are stored in the buffer. */
     public get size() {
         return this._size;
     }
+    /** How many items are stored in the buffer. */
     private set size(value: number) {
         this._size = value;
     }
@@ -21,6 +26,11 @@ export default class CircularBuffer<T> extends Collection<T> {
         return this.data.length;
     }
 
+    /**
+     * Creates a new {@link CircularBuffer} with the given max size
+     *
+     * @param maxSize The maximum number of items that can be stored in the buffer before items are deleted to make room.
+     */
     public constructor(maxSize: number);
     public constructor(
         maxSize: number,
@@ -35,6 +45,7 @@ export default class CircularBuffer<T> extends Collection<T> {
         this._size = size ?? 0;
     }
 
+    /** Method of creating a buffer with the fields set manually. */
     private static privateConstructor<T>(
         maxSize: number,
         data?: (T | undefined)[],
@@ -63,7 +74,7 @@ export default class CircularBuffer<T> extends Collection<T> {
 
     public *[Symbol.iterator](): Iterator<T> {
         if (this.isSplit()) {
-            for (let i = this.firstIndex(); i < this.maxSize; i++) {
+            for (let i = this.firstIndex; i < this.maxSize; i++) {
                 yield this.data[i] as T;
             }
 
@@ -84,29 +95,35 @@ export default class CircularBuffer<T> extends Collection<T> {
      */
     public toArray(maxLength: number = Infinity): T[] {
         if (this.isSplit()) {
-            const beginningLength = this.maxSize - this.offset;
+            // data: [567----01234]
 
-            const endLength = this.offset - (this.maxSize - this.size);
+            /** The number of items to take from the beginning section. */
+            const maxBeginningLength = Math.min(
+                this.beginningLength,
+                maxLength
+            );
 
-            // design note: much faster than iteration, [...buffer], but I wish javascript had a memcopy-like function for copying items from a section of one array to a section of another.
-            // This requires the slice function to create a "middleman" array that isn't really necessary.
-            return [
-                // beginning is at the end of the array
-                ...this.data.slice(
-                    this.offset,
-                    this.offset + Math.min(maxLength, beginningLength)
-                ),
-                // end is at the beginning of the array
-                ...this.data.slice(
-                    0,
-                    Math.min(
-                        maxLength >= beginningLength
-                            ? maxLength - beginningLength
-                            : 0,
-                        endLength
+            /** The number of items to take from the end section. */
+            const maxEndLength = Math.min(
+                this.endLength,
+                maxLength - maxBeginningLength
+            );
+
+            // beginning is at the end of the array
+            return (
+                this.data
+                    // 01234]
+                    .slice(
+                        this.firstIndex,
+                        this.firstIndex + maxBeginningLength
                     )
-                ),
-            ] as T[];
+                    .concat(
+                        // [567
+                        this.data.slice(0, maxEndLength)
+                    ) as T[]
+            );
+            // design note: much faster than iteration ([...buffer]) but I wish javascript had a memcopy-like function for copying items from a section of one array to a section of another.
+            // This requires the slice function to create a "middleman" array that isn't really necessary.
         } else {
             return this.data.slice(
                 this.offset,
@@ -128,6 +145,7 @@ export default class CircularBuffer<T> extends Collection<T> {
             );
         } else {
             const data: (T | undefined)[] = this.toArray(maxSize);
+
             if (maxSize > this.maxSize) {
                 data[maxSize - 1] = undefined;
             }
@@ -156,7 +174,7 @@ export default class CircularBuffer<T> extends Collection<T> {
     public push(item: T): void {
         if (this.maxSize === 0) return;
         this.incrementFinalIndex();
-        this.data[this.finalIndex()] = item;
+        this.data[this.finalIndex] = item;
     }
 
     /**
@@ -165,7 +183,7 @@ export default class CircularBuffer<T> extends Collection<T> {
     public unshift(item: T): void {
         if (this.maxSize === 0) return;
         this.decrementFirstIndex();
-        this.data[this.firstIndex()] = item;
+        this.data[this.firstIndex] = item;
     }
 
     /**
@@ -174,10 +192,16 @@ export default class CircularBuffer<T> extends Collection<T> {
      */
     public pop(): T | undefined {
         if (this.size === 0) return undefined;
-        const finalIndex = this.finalIndex();
+
+        const finalIndex = this.finalIndex;
         const result = this.data[finalIndex];
+
+        // set value to undefined to allow garbage collection.
         this.data[finalIndex] = undefined;
+
+        // shrink items
         this.decrementFinalIndex();
+
         return result;
     }
 
@@ -187,10 +211,16 @@ export default class CircularBuffer<T> extends Collection<T> {
      */
     public shift(): T | undefined {
         if (this.size === 0) return undefined;
-        const firstIndex = this.firstIndex();
+
+        const firstIndex = this.firstIndex;
         const result = this.data[firstIndex];
+
+        // set value to undefined to allow garbage collection
         this.data[firstIndex] = undefined;
+
+        // shrink items
         this.incrementedFirstIndex();
+
         return result;
     }
 
@@ -200,7 +230,7 @@ export default class CircularBuffer<T> extends Collection<T> {
      */
     public at(index: number): T | undefined {
         const dataIndex = this.dataIndexAt(index);
-        if (dataIndex === undefined) return undefined;
+        if (dataIndex === -1) return undefined;
         return this.data[dataIndex];
     }
 
@@ -210,17 +240,20 @@ export default class CircularBuffer<T> extends Collection<T> {
      */
     public set(index: number, item: T): void {
         const dataIndex = this.dataIndexAt(index);
-        if (dataIndex === undefined) return;
+        if (dataIndex === -1) return;
         this.data[dataIndex] = item;
     }
 
-    private dataIndexAt(index: number): number | undefined {
+    /**
+     * @returns The index in {@link data} of the item with the given index. -1 if index out of bounds.
+     */
+    private dataIndexAt(index: number): number {
         if (index < 0) {
-            if (-index > this.size) return undefined;
+            if (-index > this.size) return -1;
             return this.dataIndexAt(this.size + index);
         }
 
-        if (index >= this.size) return undefined;
+        if (index >= this.size) return -1;
 
         if (index >= this.maxSize - this.offset) {
             return index - (this.maxSize - this.offset);
@@ -229,15 +262,44 @@ export default class CircularBuffer<T> extends Collection<T> {
         }
     }
 
+    /**
+     * Whether the data is split across the end of the data array.
+     *   - If true: `data: [567----01234]`
+     *   - If false: `data: [---01234567--]`
+     */
     private isSplit(): boolean {
         return this.size > this.maxSize - this.offset;
     }
 
-    private firstIndex(): number {
+    /**
+     * The length of the beginning section of the data if the data {@link isSplit}. Nonsense otherwise.
+     * ```
+     * data: [567----01234]
+     *              |-----| <--- length of this section
+     * ```
+     */
+    private get beginningLength(): number {
+        return this.maxSize - this.offset;
+    }
+
+    /**
+     * The length of the end section of the data if the data {@link isSplit}. Nonsense otherwise.
+     * ```
+     * data: [567----01234]
+     *       |---| <--- length of this section
+     * ```
+     */
+    private get endLength(): number {
+        return this.size - this.beginningLength;
+    }
+
+    /** The index in {@link data} of the first item. */
+    private get firstIndex(): number {
         return this.offset;
     }
 
-    private finalIndex(): number {
+    /** The index in {@link data} of the final item. */
+    private get finalIndex(): number {
         if (this.isSplit()) {
             return this.size - (this.maxSize - this.offset) - 1;
         } else {
@@ -245,6 +307,7 @@ export default class CircularBuffer<T> extends Collection<T> {
         }
     }
 
+    /** Expand items by moving the final index forwards. Moves first index forwards too if the buffer is full. */
     private incrementFinalIndex(): void {
         if (this.size < this.maxSize) {
             this.size++;
@@ -257,10 +320,12 @@ export default class CircularBuffer<T> extends Collection<T> {
         }
     }
 
+    /** Shrink items by moving the final index backwards. */
     private decrementFinalIndex(): void {
         this.size--;
     }
 
+    /** Shrink items by moving first index forwards. */
     private incrementedFirstIndex(): void {
         if (this.size > 0) this.size--;
         if (this.offset === this.maxSize - 1) {
@@ -270,6 +335,7 @@ export default class CircularBuffer<T> extends Collection<T> {
         }
     }
 
+    /** Expand items by moving first index backwards. Moves final index backwards too if the buffer is full. */
     private decrementFirstIndex(): void {
         if (this.size < this.maxSize) this.size++;
         if (this.offset === 0) {
