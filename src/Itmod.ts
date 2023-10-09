@@ -42,7 +42,7 @@ import { General } from "./types/literals";
 
 // TODO? remove infinite flag; probably not worth it.
 
-// TODO join, leftjoin, groupjoin, takeSparse, skipSparse, ifEmpty, partition by count
+// TODO join, leftJoin, groupJoin, takeSparse, skipSparse, ifEmpty, partition by count
 
 // TODO? RangeItmod for efficient take, takeFinal, skip, skipFinal, takeEveryNth operations. Result of Itmod.range()
 export type Comparison =
@@ -1710,15 +1710,25 @@ export class MappedItmod<T, R> extends Itmod<R> {
     protected readonly mapping: (value: T, index: number) => R;
     protected readonly originalGetSource: () => Iterable<T>;
     protected readonly originalProperties: ItmodProperties<T>;
+    protected readonly indexOffset: number;
 
     public constructor(
         properties: ItmodProperties<T>,
         getSource: () => Iterable<T>,
-        mapping: (value: T, index: number) => R
+        mapping: (value: T, index: number) => R,
+        {
+            indexOffset = 0,
+        }: {
+            /**
+             * Offset added to the index given to the mapping function.
+             * @default 0
+             */
+            indexOffset?: number;
+        } = {}
     ) {
         super({ infinite: properties.infinite }, function* () {
             const source = getSource();
-            let i = 0;
+            let i = indexOffset;
             for (const value of source) {
                 yield mapping(value, i);
                 i++;
@@ -1727,97 +1737,137 @@ export class MappedItmod<T, R> extends Itmod<R> {
         this.mapping = mapping;
         this.originalGetSource = getSource;
         this.originalProperties = properties;
+        this.indexOffset = indexOffset;
     }
 
-    // TODO figure out how to make index consistent:
-    // public get skip() {
-    //     const self = this;
-    //     const parentSkip = super.skip;
-    //     const externalSkip = skip;
-    //     return function skip(count: number | bigint): Itmod<R> {
-    //         if (self.mapping.length >= 2) {
-    //             return parentSkip(count);
-    //         } else {
-    //             return new MappedItmod(
-    //                 self.originalProperties,
-    //                 () => externalSkip(count, self.originalGetSource()),
-    //                 self.mapping
-    //             );
-    //         }
-    //     };
-    // }
+    public get skip() {
+        const self = this;
+        const externalSkip = skip;
+        return function skip(count: number | bigint): Itmod<R> {
+            return new MappedItmod(
+                self.originalProperties,
+                () => externalSkip(count, self.originalGetSource()),
+                self.mapping,
+                // offset the mapping index for the skipped items
+                { indexOffset: Number(count) }
+            );
+        };
+    }
 
-    // public get takeFinal() {
-    //     const self = this;
-    //     const externalTakeFinal = takeFinal;
-    //     return function takeFinal(count: number | bigint) {
-    //         return new MappedItmod(
-    //             self.originalProperties,
-    //             () => externalTakeFinal(count, self.originalGetSource()),
-    //             self.mapping
-    //         );
-    //     };
-    // }
+    // Each of these overloads checks if the mapping function uses index.
+    // If it doesn't. It is safe to to take or skip before mapping without doing anything to adjust the index.
+    // TODO find ways to make the index correct when needed without just mapping first.
+    // skip just needs an offset, for example.
 
-    // public get skipFinal() {
-    //     const self = this;
-    //     const externalSkipFinal = skipFinal;
-    //     return function skipFinal(count: number | bigint) {
-    //         return new MappedItmod(
-    //             self.originalProperties,
-    //             () => externalSkipFinal(count, self.originalGetSource()),
-    //             self.mapping
-    //         );
-    //     };
-    // }
+    // There's no overload for take because take then map already had optimal behavior.
 
-    // public get takeEveryNth() {
-    //     const self = this;
-    //     const externalTakeEveryNth = takeEveryNth;
-    //     return function takeEveryNth(count: number | bigint) {
-    //         return new MappedItmod(
-    //             self.originalProperties,
-    //             () => externalTakeEveryNth(count, self.originalGetSource()),
-    //             self.mapping
-    //         );
-    //     };
-    // }
+    public get takeFinal() {
+        const self = this;
+        const parentTakeFinal = super.takeFinal;
+        const externalTakeFinal = takeFinal;
+        return function takeFinal(count: number | bigint): Itmod<R> {
+            // check if mapping function uses for index.
+            if (self.mapping.length >= 2) {
+                return parentTakeFinal(count);
+            } else {
+                return new MappedItmod(
+                    self.originalProperties,
+                    () => externalTakeFinal(count, self.originalGetSource()),
+                    self.mapping
+                );
+            }
+        };
+    }
 
-    // public get takeRandom() {
-    //     const self = this;
-    //     const externalTakeRandom = takeRandom;
-    //     return function takeRandom(count: number | bigint) {
-    //         return new MappedItmod(
-    //             self.originalProperties,
-    //             () => externalTakeRandom(count, self.originalGetSource()),
-    //             self.mapping
-    //         );
-    //     };
-    // }
+    public get skipFinal() {
+        const self = this;
+        const externalSkipFinal = skipFinal;
+        const parentSkipFinal = super.skipFinal;
+        return function skipFinal(count: number | bigint): Itmod<R> {
+            // check if mapping function uses for index.
+            if (self.mapping.length >= 2) {
+                return parentSkipFinal(count);
+            } else {
+                return new MappedItmod(
+                    self.originalProperties,
+                    () => externalSkipFinal(count, self.originalGetSource()),
+                    self.mapping
+                );
+            }
+        };
+    }
 
-    // public get skipEveryNth() {
-    //     const self = this;
-    //     const externalSkipEveryNth = skipEveryNth;
-    //     return function skipEveryNth(count: number | bigint) {
-    //         return new MappedItmod(
-    //             self.originalProperties,
-    //             () => externalSkipEveryNth(count, self.originalGetSource()),
-    //             self.mapping
-    //         );
-    //     };
-    // }
+    public get takeEveryNth() {
+        const self = this;
+        const externalTakeEveryNth = takeEveryNth;
+        const parentTakeEveryNth = super.takeEveryNth;
+        return function takeEveryNth(count: number | bigint): Itmod<R> {
+            // check if mapping function uses for index.
+            if (self.mapping.length >= 2) {
+                return parentTakeEveryNth(count);
+            } else {
+                return new MappedItmod(
+                    self.originalProperties,
+                    () => externalTakeEveryNth(count, self.originalGetSource()),
+                    self.mapping
+                );
+            }
+        };
+    }
 
-    // public get skipRandom() {
-    //     const self = this;
-    //     const externalSkipRandom = skipRandom;
-    //     return function skipRandom(count: number | bigint) {
-    //         return new MappedItmod(
-    //             self.originalProperties,
-    //             () => externalSkipRandom(count, self.originalGetSource()),
-    //             self.mapping
-    //         );
-    //     };
-    // }
+    public get takeRandom() {
+        const self = this;
+        const externalTakeRandom = takeRandom;
+        const parentTakeRandom = super.takeRandom;
+        return function takeRandom(count: number | bigint): Itmod<R> {
+            // check if mapping function uses for index.
+            if (self.mapping.length >= 2) {
+                return parentTakeRandom(count);
+            } else {
+                return new MappedItmod(
+                    self.originalProperties,
+                    () => externalTakeRandom(count, self.originalGetSource()),
+                    self.mapping
+                );
+            }
+        };
+    }
+
+    public get skipEveryNth() {
+        const self = this;
+        const externalSkipEveryNth = skipEveryNth;
+        const parentSkipEveryNth = super.skipEveryNth;
+        return function skipEveryNth(count: number | bigint): Itmod<R> {
+            // check if mapping function uses for index.
+            if (self.mapping.length >= 2) {
+                return parentSkipEveryNth(count);
+            } else {
+                return new MappedItmod(
+                    self.originalProperties,
+                    () => externalSkipEveryNth(count, self.originalGetSource()),
+                    self.mapping
+                );
+            }
+        };
+    }
+
+    public get skipRandom() {
+        const self = this;
+        const externalSkipRandom = skipRandom;
+        const parentSkipRandom = super.skipRandom;
+        return function skipRandom(count: number | bigint): Itmod<R> {
+            // check if mapping function uses for index.
+            if (self.mapping.length >= 2) {
+                return parentSkipRandom(count);
+            } else {
+                return new MappedItmod(
+                    self.originalProperties,
+                    () => externalSkipRandom(count, self.originalGetSource()),
+                    self.mapping
+                );
+            }
+        };
+    }
 }
 
 const _emptyItmod = new Itmod<any>({}, returns(emptyIterable()));
