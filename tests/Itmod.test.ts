@@ -1727,11 +1727,20 @@ describe("sequenceEqual", () => {
 // TODO tests for includes, some, every, distinct, defined, notNull, zip, including, makeString, flat, split, partitionBySize
 
 /*
- * TODO list of optimized special cases to test
+ * TODO list of special cases to test
  * - take from fresh array
  * - takeWhile from fresh array
  * - groupBy then toMap
  * - partitionBySize with infinity, with fresh array and without
+ * - sort,sortDescending then toArray
+ * - sort,sortDescending then thenBy,thenByDescending
+ * - takeFinal then toArray,asArray
+ * - from various collections then toArray,asArray
+ * - from array then asArray
+ * - map and then skip,skipFinal,skipEveryNth,skipRandom,takeFinal,takeEveryNth,takeRandom
  * -
+ *
+ *
+ * TODO find other special cases to test
  *
  */
