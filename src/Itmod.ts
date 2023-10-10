@@ -331,7 +331,7 @@ export default class Itmod<T> implements Iterable<T> {
         const self = this;
         return function map<R>(
             mapping: (value: T, index: number) => R
-        ): MappedItmod<T, R> {
+        ): Itmod<R> {
             return new MappedItmod(self.properties, self.getSource, mapping);
         };
     }
@@ -1000,7 +1000,7 @@ export default class Itmod<T> implements Iterable<T> {
             order: Order<T> = autoComparator
         ): Itmod<T> {
             requireSafeIntegerOrInfinity(requireNonNegative(count));
-            if (count === 0 || count === 0n) return Itmod.empty<T>();
+            if (isZero(count)) return Itmod.empty<T>();
             if (count === Infinity) return self.sort(order);
 
             return new Itmod({ fresh: true, expensive: true }, () => {
@@ -1033,7 +1033,7 @@ export default class Itmod<T> implements Iterable<T> {
             order: Order<T> = autoComparator
         ): Itmod<T> {
             requireSafeIntegerOrInfinity(requireNonNegative(count));
-            if (count === 0 || count === 0n) return Itmod.empty<T>();
+            if (isZero(count)) return Itmod.empty<T>();
             if (count === Infinity) return self.sort(order);
 
             return new Itmod({ fresh: true, expensive: true }, () => {
@@ -1711,6 +1711,7 @@ export class MappedItmod<T, R> extends Itmod<R> {
     protected readonly originalGetSource: () => Iterable<T>;
     protected readonly originalProperties: ItmodProperties<T>;
     protected readonly indexOffset: number;
+    protected readonly indexIncrement: number;
 
     public constructor(
         properties: ItmodProperties<T>,
@@ -1718,12 +1719,18 @@ export class MappedItmod<T, R> extends Itmod<R> {
         mapping: (value: T, index: number) => R,
         {
             indexOffset = 0,
+            indexIncrement = 1,
         }: {
             /**
              * Offset added to the index given to the mapping function.
              * @default 0
              */
             indexOffset?: number;
+            /**
+             * How much to increment the index given to the mapping function.
+             * @default 1
+             */
+            indexIncrement?: number;
         } = {}
     ) {
         super({ infinite: properties.infinite }, function* () {
@@ -1731,13 +1738,14 @@ export class MappedItmod<T, R> extends Itmod<R> {
             let i = indexOffset;
             for (const value of source) {
                 yield mapping(value, i);
-                i++;
+                i += indexIncrement;
             }
         });
         this.mapping = mapping;
         this.originalGetSource = getSource;
         this.originalProperties = properties;
         this.indexOffset = indexOffset;
+        this.indexIncrement = indexIncrement;
     }
 
     public get skip() {
@@ -1748,30 +1756,33 @@ export class MappedItmod<T, R> extends Itmod<R> {
                 self.originalProperties,
                 () => externalSkip(count, self.originalGetSource()),
                 self.mapping,
-                // offset the mapping index for the skipped items
-                { indexOffset: Number(count) }
+                // offset the mapping index for the non-skipped items
+                { indexOffset: Number(count) + self.indexOffset }
             );
         };
     }
 
     // Each of these overloads checks if the mapping function uses index.
-    // If it doesn't. It is safe to to take or skip before mapping without doing anything to adjust the index.
+    // If it doesn't. It is safe to take or skip before mapping without doing anything to adjust the index.
     // TODO find ways to make the index correct when needed without just mapping first.
-    // skip just needs an offset, for example.
 
-    // There's no overload for take because take then map already had optimal behavior.
+    // There's no overload for take because take then map already has optimal behavior.
 
     public get takeFinal() {
         const self = this;
         const parentTakeFinal = super.takeFinal;
         const externalTakeFinal = takeFinal;
         return function takeFinal(count: number | bigint): Itmod<R> {
-            // check if mapping function uses for index.
+            // check if mapping function uses the index.
             if (self.mapping.length >= 2) {
                 return parentTakeFinal(count);
             } else {
                 return new MappedItmod(
-                    self.originalProperties,
+                    {
+                        ...self.originalProperties,
+                        expensive: true,
+                        fresh: true,
+                    },
                     () => externalTakeFinal(count, self.originalGetSource()),
                     self.mapping
                 );
@@ -1784,7 +1795,7 @@ export class MappedItmod<T, R> extends Itmod<R> {
         const externalSkipFinal = skipFinal;
         const parentSkipFinal = super.skipFinal;
         return function skipFinal(count: number | bigint): Itmod<R> {
-            // check if mapping function uses for index.
+            // check if mapping function uses the index.
             if (self.mapping.length >= 2) {
                 return parentSkipFinal(count);
             } else {
@@ -1802,7 +1813,7 @@ export class MappedItmod<T, R> extends Itmod<R> {
         const externalTakeEveryNth = takeEveryNth;
         const parentTakeEveryNth = super.takeEveryNth;
         return function takeEveryNth(count: number | bigint): Itmod<R> {
-            // check if mapping function uses for index.
+            // check if mapping function uses the index.
             if (self.mapping.length >= 2) {
                 return parentTakeEveryNth(count);
             } else {
@@ -1820,7 +1831,7 @@ export class MappedItmod<T, R> extends Itmod<R> {
         const externalTakeRandom = takeRandom;
         const parentTakeRandom = super.takeRandom;
         return function takeRandom(count: number | bigint): Itmod<R> {
-            // check if mapping function uses for index.
+            // check if mapping function uses the index.
             if (self.mapping.length >= 2) {
                 return parentTakeRandom(count);
             } else {
@@ -1838,7 +1849,7 @@ export class MappedItmod<T, R> extends Itmod<R> {
         const externalSkipEveryNth = skipEveryNth;
         const parentSkipEveryNth = super.skipEveryNth;
         return function skipEveryNth(count: number | bigint): Itmod<R> {
-            // check if mapping function uses for index.
+            // check if mapping function uses the index.
             if (self.mapping.length >= 2) {
                 return parentSkipEveryNth(count);
             } else {
@@ -1856,7 +1867,7 @@ export class MappedItmod<T, R> extends Itmod<R> {
         const externalSkipRandom = skipRandom;
         const parentSkipRandom = super.skipRandom;
         return function skipRandom(count: number | bigint): Itmod<R> {
-            // check if mapping function uses for index.
+            // check if mapping function uses the index.
             if (self.mapping.length >= 2) {
                 return parentSkipRandom(count);
             } else {
@@ -1875,6 +1886,7 @@ const _emptyItmod = new Itmod<any>({}, returns(emptyIterable()));
 function take<T>(count: number | bigint, source: Iterable<T>): Iterable<T> {
     requireIntegerOrInfinity(requireNonNegative(count));
     if (count === Infinity) return source;
+    if (isZero(count)) return [];
 
     const size = nonIteratedCountOrUndefined(source);
     if (size !== undefined) {
@@ -1896,7 +1908,7 @@ function take<T>(count: number | bigint, source: Iterable<T>): Iterable<T> {
 
 function skip<T>(count: number | bigint, source: Iterable<T>): Iterable<T> {
     requireIntegerOrInfinity(requireNonNegative(count));
-    if (count === 0 || count === 0n) return source;
+    if (isZero(count)) return source;
     if (count === Infinity) return [];
 
     return {
@@ -1925,13 +1937,16 @@ function skip<T>(count: number | bigint, source: Iterable<T>): Iterable<T> {
     };
 }
 
+/**
+ * note: expensive and fresh
+ */
 function takeFinal<T>(
     count: number | bigint,
     source: Iterable<T>
 ): Iterable<T> {
     requireIntegerOrInfinity(requireNonNegative(count));
     if (count === Infinity) return source;
-    if (count === 0 || count === 0n) return [];
+    if (isZero(count)) return [];
 
     const size = nonIteratedCountOrUndefined(source);
     if (size !== undefined) {
@@ -1953,7 +1968,7 @@ function skipFinal<T>(
 ): Iterable<T> {
     requireIntegerOrInfinity(requireNonNegative(count));
     if (count === Infinity) return [];
-    if (count === 0 || count === 0n) return source;
+    if (isZero(count)) return source;
 
     const size = nonIteratedCountOrUndefined(source);
 
