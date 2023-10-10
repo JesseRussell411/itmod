@@ -74,15 +74,21 @@ export default class CircularBuffer<T> extends Collection<T> {
 
     public *[Symbol.iterator](): Iterator<T> {
         if (this.isSplit()) {
+            // data: [567-----01234]
+            //               |-----| <-- iterate this section first
             for (let i = this.firstIndex; i < this.maxSize; i++) {
                 yield this.data[i] as T;
             }
 
-            const endLength = this.offset - (this.maxSize - this.size);
+            // data: [567-----01234]
+            //       |---| <--------- iterate this section second
+            const endLength = this.endLength;
             for (let i = 0; i < endLength; i++) {
                 yield this.data[i] as T;
             }
         } else {
+            // data [---1234567---]
+            //         |-------| <----- iterate this section
             const end = this.offset + this.size;
             for (let i = this.offset; i < end; i++) {
                 yield this.data[i] as T;
@@ -91,11 +97,67 @@ export default class CircularBuffer<T> extends Collection<T> {
     }
 
     /**
+     * @returns An {@link Iterable} over the buffer's elements in reverse order.
+     */
+    public reversed(): Iterable<T> {
+        const self = this;
+        return {
+            *[Symbol.iterator]() {
+                if (self.isSplit()) {
+                    // data: [567-----01234]
+                    //       |---| <--------- iterate this section first (backwards)
+                    const endLength = self.endLength;
+                    for (let i = endLength - 1; i >= 0; i--) {
+                        yield self.data[i] as T;
+                    }
+
+                    // data: [567-----01234]
+                    //               |-----| <-- iterate this section second (backwards)
+                    for (let i = self.maxSize - 1; i >= self.offset; i--) {
+                        yield self.data[i] as T;
+                    }
+                } else {
+                    // data [---1234567---]
+                    //         |-------| <----- iterate this section (backwards)
+                    for (
+                        let i = self.offset + self.size - 1;
+                        i >= self.offset;
+                        i--
+                    ) {
+                        yield self.data[i] as T;
+                    }
+                }
+            },
+        };
+    }
+
+    /** In-place reverses the buffer's elements. */
+    public reverse() {
+        let end = Math.trunc(this.size / 2);
+
+        for (let i = 0; i < end; i++) {
+            /** index of item to swap with */
+            const swapItemIndex = this.size - 1 - i;
+
+            const temp = this.at(i) as T;
+            this.set(i, this.at(swapItemIndex) as T);
+            this.set(swapItemIndex, temp);
+        }
+    }
+
+    /**
+     * Copies the contents of the buffer into an {@link Array}.
      * @param maxLength Maximum length of the returned array. Truncates values that don't fit from the end of the buffer.
+     * @returns The {@link Array}.
      */
     public toArray(maxLength: number = Infinity): T[] {
         if (this.isSplit()) {
+            // The elements are split across the end of the data array
+
             // data: [567----01234]
+            //       |---|  |-----| <-- beginning section
+            //         ^
+            //          \__end section
 
             /** The number of items to take from the beginning section. */
             const maxBeginningLength = Math.min(
@@ -110,21 +172,21 @@ export default class CircularBuffer<T> extends Collection<T> {
             );
 
             // beginning is at the end of the array
-            return (
-                this.data
-                    // 01234]
-                    .slice(
-                        this.firstIndex,
-                        this.firstIndex + maxBeginningLength
-                    )
-                    .concat(
-                        // [567
-                        this.data.slice(0, maxEndLength)
-                    ) as T[]
-            );
+            return [
+                // 01234]
+                ...this.data.slice(
+                    this.firstIndex,
+                    this.firstIndex + maxBeginningLength
+                ),
+                // [567
+                ...this.data.slice(0, maxEndLength),
+            ] as T[];
             // design note: much faster than iteration ([...buffer]) but I wish javascript had a memcopy-like function for copying items from a section of one array to a section of another.
             // This requires the slice function to create a "middleman" array that isn't really necessary.
         } else {
+            // data: [---01234567---]
+            // Much simpler scenario. Elements are somewhere within the data array, not split in the middle.
+
             return this.data.slice(
                 this.offset,
                 this.offset + Math.min(maxLength, this.size)
@@ -135,7 +197,7 @@ export default class CircularBuffer<T> extends Collection<T> {
     /**
      * copies the contents of the circular buffer into a new circular buffer.
      */
-    public clone(maxSize?: number) {
+    public clone(maxSize?: number): CircularBuffer<T> {
         if (maxSize === undefined || maxSize === this.maxSize) {
             return CircularBuffer.privateConstructor(
                 this.maxSize,
@@ -169,7 +231,8 @@ export default class CircularBuffer<T> extends Collection<T> {
     }
 
     /**
-     * Appends the value to the end of the buffer, removing the first element if the buffer is full.
+     * Appends the element to the end of the buffer (which would be removed by {@link pop}).
+     * Removing the first element if the buffer is full.
      */
     public push(item: T): void {
         if (this.maxSize === 0) return;
@@ -178,7 +241,8 @@ export default class CircularBuffer<T> extends Collection<T> {
     }
 
     /**
-     * Appends the value to the start of the buffer, removing the final element if the buffer is full.
+     * Appends the element to the start of the buffer (which would be removed by {@link shift}).
+     * Removes the final element if the buffer was full.
      */
     public unshift(item: T): void {
         if (this.maxSize === 0) return;
@@ -187,8 +251,8 @@ export default class CircularBuffer<T> extends Collection<T> {
     }
 
     /**
-     * Removes the final element (result of {@link push}).
-     * @returns The final element or undefined if the buffer is empty.
+     * Removes the final element (the element added by {@link push}).
+     * @returns The final element or undefined if the buffer was empty.
      */
     public pop(): T | undefined {
         if (this.size === 0) return undefined;
@@ -206,7 +270,7 @@ export default class CircularBuffer<T> extends Collection<T> {
     }
 
     /**
-     * Removes the first element.
+     * Removes the first element (the element added by {@link unshift}).
      * @returns The first element or undefined if the buffer is empty.
      */
     public shift(): T | undefined {
