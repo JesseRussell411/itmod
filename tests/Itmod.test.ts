@@ -1737,7 +1737,7 @@ describe("sequenceEqual", () => {
  * - takeFinal then toArray,asArray
  * - from various collections then toArray,asArray
  * - from array then asArray
- * - map and then skip,skipFinal,skipEveryNth,skipRandom,takeFinal,takeEveryNth,takeRandom
+ * - map and then skip,skipFinal,skipEveryNth,skipRandom,takeFinal,takeEveryNth,takeRandom with multiple combinations
  * -
  *
  *
