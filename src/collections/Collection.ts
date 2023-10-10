@@ -1,5 +1,8 @@
+/**
+ * A collections of elements that has a known size and can be iterated.
+ */
 export default abstract class Collection<T> implements Iterable<T> {
-    /** How many elements are in the {@link Collection}. Required to have constant or near constant time complexity and low latency. */
+    /** How many elements are in the {@link Collection}. Assumed to have constant or near constant time complexity and low latency. */
     public abstract get size(): number;
     // personal opinion on design: the creators of java made a mistake with their Collection interface by not specifying that count() had to have constant time complexity, unfortunately, when comparing the equality of two different types of lists, they don't check size. One could be 1000 items long and the other 1001 items, which would mean that they're not equal, but java will still iterate through 1000 items of both of them anyway because it can't assume that Count() is efficient.
 
