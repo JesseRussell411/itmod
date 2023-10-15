@@ -1,6 +1,8 @@
 # itmod
 Stands for Iterator Modifier. Linq for typescript.
 
+Allows the use of array operations like map, filter, or reduce on any Iterable (anything with a [Symbol.Iterator] method) with lazy execution.
+
 To install:
 
 `npm install iterator-modifier`
