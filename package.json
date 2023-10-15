@@ -1,19 +1,50 @@
 {
   "name": "iterator-modifier",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "A Linq clone. Attempts to be the best Linq clone. Use the from method on the Itmod class to query an iterable.",
-  "main": "index.js",
-  "scripts": {
-    "test": "jest"
+  "main": "dist/Itmod.js",
+  "keywords": [
+    "data",
+    "datascience",
+    "iterable",
+    "linq",
+    "map",
+    "filter",
+    "reduce",
+    "functional",
+    "declarative",
+    "query",
+    "typescript",
+    "stream",
+    "array",
+    "list",
+    "iterator",
+    "no-dependencies",
+    "function"
+  ],
+  "directories": {
+    "test": "tests",
+    "build": "tsc"
   },
-  "author": "",
-  "license": "ISC",
-  "prettier": {
-    "tabWidth": 4
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/jest": "^29.5.4",
     "jest": "^29.6.4",
     "ts-jest": "^29.1.1"
-  }
+  },
+  "scripts": {
+    "test": "jest",
+    "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JesseRussell411/itmod.git"
+  },
+  "author": "Jesse Russell",
+  "license": "ISC",
+  "types": "./dist/Itmod.d.ts",
+  "bugs": {
+    "url": "https://github.com/JesseRussell411/itmod/issues"
+  },
+  "homepage": "https://github.com/JesseRussell411/itmod#readme"
 }
