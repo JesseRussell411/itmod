@@ -1,7 +1,7 @@
 {
-  "name": "itmod",
-  "version": "1.0.0",
-  "description": "",
+  "name": "iterator-modifier",
+  "version": "0.1.0",
+  "description": "A Linq clone. Attempts to be the best Linq clone. Use the from method on the Itmod class to query an iterable.",
   "main": "index.js",
   "scripts": {
     "test": "jest"

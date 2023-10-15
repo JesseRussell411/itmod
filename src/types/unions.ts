@@ -1,1 +1,1 @@
-type Difference<A, B> = A extends B ? never : A;
+export type Difference<A, B> = A extends B ? never : A;

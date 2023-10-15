@@ -474,11 +474,11 @@ export default class Itmod<T> implements Iterable<T> {
             ) => R,
             finalize: (
                 /** The final result of the reducer. */
-                result: R | undefined,
+                result: R,
                 /** How many items were in the {@link Iterable}. */
                 count: number
             ) => F
-        ): F;
+        ): F | undefined;
     } {
         const self = this;
         return function reduce(
@@ -905,11 +905,14 @@ export default class Itmod<T> implements Iterable<T> {
 
     public get indexed() {
         const self = this;
-        return function indexed(): MappedItmod<T, [index: number, item: T]> {
+        return function indexed(): Itmod<[index: number, item: T]> {
             return self.map((item, index) => [index, item]);
         };
     }
 
+    /**
+     * @returns Whether the itmod contains the item.
+     */
     public get includes() {
         const self = this;
         return function includes(item: T): boolean {
@@ -1601,6 +1604,7 @@ export class SortedItmod<T> extends Itmod<T> {
     private readonly comparator: Comparator<T>;
     private readonly originalGetSource: () => Iterable<T>;
     private readonly originalProperties: ItmodProperties<T>;
+    private readonly config: { preSorted?: boolean };
     public constructor(
         properties: ItmodProperties<T>,
         getSource: () => Iterable<T>,
@@ -1642,6 +1646,7 @@ export class SortedItmod<T> extends Itmod<T> {
             return 0;
         };
         this.comparator = comparator;
+        this.config = { preSorted };
     }
 
     /**
@@ -1710,8 +1715,10 @@ export class MappedItmod<T, R> extends Itmod<R> {
     protected readonly mapping: (value: T, index: number) => R;
     protected readonly originalGetSource: () => Iterable<T>;
     protected readonly originalProperties: ItmodProperties<T>;
-    protected readonly indexOffset: number;
-    protected readonly indexIncrement: number;
+    protected readonly config: {
+        indexOffset: number;
+        indexIncrement: number;
+    };
 
     public constructor(
         properties: ItmodProperties<T>,
@@ -1744,8 +1751,21 @@ export class MappedItmod<T, R> extends Itmod<R> {
         this.mapping = mapping;
         this.originalGetSource = getSource;
         this.originalProperties = properties;
-        this.indexOffset = indexOffset;
-        this.indexIncrement = indexIncrement;
+        this.config = { indexOffset, indexIncrement };
+    }
+
+    public get take() {
+        const self = this;
+        const externalTake = take;
+        return function take(count: number | bigint) {
+            // no need to adjust indexes for take.
+            return new MappedItmod(
+                self.originalProperties,
+                () => externalTake(count, self.originalGetSource()),
+                self.mapping,
+                self.config
+            );
+        };
     }
 
     public get skip() {
@@ -1757,7 +1777,10 @@ export class MappedItmod<T, R> extends Itmod<R> {
                 () => externalSkip(count, self.originalGetSource()),
                 self.mapping,
                 // offset the mapping index for the non-skipped items
-                { indexOffset: Number(count) + self.indexOffset }
+                {
+                    ...self.config,
+                    indexOffset: Number(count) + self.config.indexIncrement,
+                }
             );
         };
     }
