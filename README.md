@@ -14,5 +14,5 @@ import Itmod from "iterator-modifier;
 const mean = Itmod.from([1,2,3])
     .map(n => n + 1)
     .filter(n => n % 2 === 0)
-    .reduce((t, n) => t + n, (total, numCount) => total / numCount)
+    .reduce((t, n) => t + n, (total, numCount) => total / numCount);
 ```
