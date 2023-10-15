@@ -8,11 +8,15 @@ To install:
 To use:
 
 ```
-import Itmod from "iterator-modifier;
+import Itmod from "iterator-modifier";
 
 /** The mean of 2 and 4 */
-const mean = Itmod.from([1,2,3])
-    .map(n => n + 1)
-    .filter(n => n % 2 === 0)
-    .reduce((t, n) => t + n, (total, numCount) => total / numCount);
+const mean = Itmod.from([1, 2, 3])
+    .map((n) => n + 1)
+    .filter((n) => n % 2 === 0)
+    .reduce(
+        (t, n) => t + n,
+        (total, numCount) => total / numCount
+    );
+console.log("meeeeeeeeeeeeean:", mean);
 ```
