@@ -23,12 +23,14 @@ const mean = Itmod.from([1, 2, 3])
 console.log("mean:", mean);
 ```
 
-##Some nice features.
+## Some nice features.
 
-###Sorting with default behavior that makes sense.
+### Sorting with default behavior that makes sense.
+
 `Itmod.of(1,10, 2, 20, 7, 90, 3).sort().toArray()` => `[1, 2, 3, 7, 10, 20, 90]`
 `[1,10, 2, 20, 7, 90, 3].sort()` => `[1, 10, 2, 20, 3, 7, 90]`
 
-###Converting to and from objects.
+### Converting to and from objects.
+
 `Itmod.fromObject({one: 1, two: 2, three: 3}).append(["four", 4]).toObject()` => `{one: 1, two: 2, three: 3, four: 4}`
 
