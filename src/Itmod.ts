@@ -28,15 +28,15 @@ import {
 import { BreakSignal, breakSignal } from "./signals";
 import {
     Comparator,
-    Field,
     FieldSelector,
     Order,
     asComparator,
     autoComparator,
+    cmpGT,
+    cmpLT,
     reverseOrder,
 } from "./sorting";
 import MapEntryLike from "./types/MapEntryLike";
-import { General } from "./types/literals";
 
 // TODO unit tests
 
@@ -442,12 +442,51 @@ export default class Itmod<T> implements Iterable<T> {
     }
 
     public get reduce(): {
+        // using General<T>, caused more problems than it solved ):
+        // /**
+        //  * Combines all the items into one using the given reducer function.
+        //  * @param reducer Combines each item with the accumulating result, starting with the first two items.
+        //  * @returns The final result of the reducer, unless the itmod was empty, then undefined is returned.
+        //  */
+        // <R = General<T>>(
+        //     reducer: (
+        //         /** The accumulating result. Equal to the returned value from the previous item. */
+        //         accumulator: R | T,
+        //         /** The current value to add onto the result. */
+        //         value: T,
+        //         /** The index of the current value. */
+        //         index: number
+        //     ) => R
+        // ): R | undefined;
+        // /**
+        //  * Combines all the items into one using the given reducer function.
+        //  * @param reducer Combines each item with the accumulating result, starting with the first two items.
+        //  * @param finalizer Called after the result is collected to perform any final modifications. Not called if the itmod was empty.
+        //  * @returns The result of the finalizer unless the itmod was empty, then undefined is returned.
+        //  */
+        // <F, R = General<T>>(
+        //     reducer: (
+        //         /** The accumulating result. Equal to the returned value from the previous item. */
+        //         accumulator: R | T,
+        //         /** The current value to add onto the result. */
+        //         value: T,
+        //         /** The index of the current value. */
+        //         index: number
+        //     ) => R,
+        //     finalize: (
+        //         /** The final result of the reducer. */
+        //         result: R,
+        //         /** How many items were in the {@link Iterable}. */
+        //         count: number
+        //     ) => F
+        // ): F | undefined;
+
         /**
          * Combines all the items into one using the given reducer function.
          * @param reducer Combines each item with the accumulating result, starting with the first two items.
          * @returns The final result of the reducer, unless the itmod was empty, then undefined is returned.
          */
-        <R = General<T>>(
+        <R = T>(
             reducer: (
                 /** The accumulating result. Equal to the returned value from the previous item. */
                 accumulator: R | T,
@@ -463,7 +502,7 @@ export default class Itmod<T> implements Iterable<T> {
          * @param finalizer Called after the result is collected to perform any final modifications. Not called if the itmod was empty.
          * @returns The result of the finalizer unless the itmod was empty, then undefined is returned.
          */
-        <F, R = General<T>>(
+        <F, R = T>(
             reducer: (
                 /** The accumulating result. Equal to the returned value from the previous item. */
                 accumulator: R | T,
@@ -1020,70 +1059,112 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
-    /**
-     * @returns The smallest given number of items.
-     * @param count How many items to return.
-     * @param order How to sort the items.
-     */
-    public get min() {
+    public get min(): {
+        /**
+         * @returns The smallest given number of items.
+         * @param count How many items to return.
+         * @param order How to sort the items.
+         */
+        (count: number | bigint, order?: Order<T>): Itmod<T>;
+        /**
+         * @returns The smallest item.
+         * @param order How to sort the items.
+         */
+        (order?: Order<T>): T | undefined;
+    } {
         this.requireSelfNotInfinite(
             "cannot get the largest of infinite values"
         );
         const self = this;
-        return function min(
-            count: number | bigint,
-            order: Order<T> = autoComparator
-        ): Itmod<T> {
-            requireSafeIntegerOrInfinity(requireNonNegative(count));
-            if (isZero(count)) return Itmod.empty<T>();
-            if (count === Infinity) return self.sort(order);
+        function min(count: number | bigint, order?: Order<T>): Itmod<T>;
+        function min(order?: Order<T>): T | undefined;
+        function min(
+            ...args:
+                | [count: number | bigint, order?: Order<T>]
+                | [order?: Order<T>]
+        ): Itmod<T> | T | undefined {
+            if (typeof args[0] === "number" || typeof args[0] === "bigint") {
+                const [count, order = autoComparator] = args;
+                requireSafeIntegerOrInfinity(requireNonNegative(count));
+                if (isZero(count)) return Itmod.empty<T>();
+                if (count === Infinity) return self.sort(order);
 
-            return new Itmod({ fresh: true, expensive: true }, () => {
-                const source = self.getSource();
+                return new Itmod({ fresh: true, expensive: true }, () => {
+                    const source = self.getSource();
 
-                const result = new SortedSequence<T>(order, {
-                    maxSize: Number(count),
-                    keep: "least",
+                    const result = new SortedSequence<T>(order, {
+                        maxSize: Number(count),
+                        keep: "least",
+                    });
+
+                    result.pushMany(source);
+
+                    return result;
                 });
+            } else {
+                const [order = autoComparator] = args;
+                const comparator = asComparator(order);
 
-                result.pushMany(source);
-
-                return result;
-            });
-        };
+                return self.reduce((least, current) =>
+                    cmpLT(comparator(current, least)) ? current : least
+                ) as T | undefined;
+            }
+        }
+        return min;
     }
 
-    /**
-     * @returns The largest given number of items.
-     * @param count How many items to return.
-     * @param order How to sort the items.
-     */
-    public get max() {
+    public get max(): {
+        /**
+         * @returns The largest given number of items.
+         * @param count How many items to return.
+         * @param order How to sort the items.
+         */
+        (count: number | bigint, order?: Order<T>): Itmod<T>;
+        /**
+         * @returns The largest item.
+         * @param order How to sort the items.
+         */
+        (order?: Order<T>): T | undefined;
+    } {
         this.requireSelfNotInfinite(
             "cannot get the largest of infinite values"
         );
         const self = this;
-        return function max(
-            count: number | bigint,
-            order: Order<T> = autoComparator
-        ): Itmod<T> {
-            requireSafeIntegerOrInfinity(requireNonNegative(count));
-            if (isZero(count)) return Itmod.empty<T>();
-            if (count === Infinity) return self.sort(order);
+        function max(count: number | bigint, order?: Order<T>): Itmod<T>;
+        function max(order?: Order<T>): T | undefined;
+        function max(
+            ...args:
+                | [count: number | bigint, order?: Order<T>]
+                | [order?: Order<T>]
+        ): Itmod<T> | T | undefined {
+            if (typeof args[0] === "number" || typeof args[0] === "bigint") {
+                const [count, order = autoComparator] = args;
+                requireSafeIntegerOrInfinity(requireNonNegative(count));
+                if (isZero(count)) return Itmod.empty<T>();
+                if (count === Infinity) return self.sort(order);
 
-            return new Itmod({ fresh: true, expensive: true }, () => {
-                const source = self.getSource();
+                return new Itmod({ fresh: true, expensive: true }, () => {
+                    const source = self.getSource();
 
-                const result = new SortedSequence<T>(order, {
-                    maxSize: Number(count),
-                    keep: "greatest",
+                    const result = new SortedSequence<T>(order, {
+                        maxSize: Number(count),
+                        keep: "greatest",
+                    });
+
+                    result.pushMany(source);
+
+                    return result;
                 });
+            } else {
+                const [order = autoComparator] = args;
+                const comparator = asComparator(order);
 
-                result.pushMany(source);
-
-                return result;
-            });
-        };
+                return self.reduce((greatest, current) =>
+                    cmpGT(comparator(current, greatest)) ? current : greatest
+                ) as T | undefined;
+            }
+        }
+        return max;
     }
 
     public get groupBy(): {
@@ -1442,9 +1523,8 @@ export default class Itmod<T> implements Iterable<T> {
     public get sort(): {
         (order: Comparator<T>): SortedItmod<T>;
         (order: FieldSelector<T>): SortedItmod<T>;
-        (order: Field<T>): SortedItmod<T>;
-        (...orders: (Comparator<T> | Field<T>)[]): SortedItmod<T>;
-        (...orders: (FieldSelector<T> | Field<T>)[]): SortedItmod<T>;
+        (...orders: Comparator<T>[]): SortedItmod<T>;
+        (...orders: FieldSelector<T>[]): SortedItmod<T>;
         (...orders: Order<T>[]): SortedItmod<T>;
     } {
         this.requireSelfNotInfinite("cannot sort infinite items");
@@ -1465,9 +1545,8 @@ export default class Itmod<T> implements Iterable<T> {
     public get sortDescending(): {
         (order: Comparator<T>): SortedItmod<T>;
         (order: FieldSelector<T>): SortedItmod<T>;
-        (order: Field<T>): SortedItmod<T>;
-        (...orders: (Comparator<T> | Field<T>)[]): SortedItmod<T>;
-        (...orders: (FieldSelector<T> | Field<T>)[]): SortedItmod<T>;
+        (...orders: Comparator<T>[]): SortedItmod<T>;
+        (...orders: FieldSelector<T>[]): SortedItmod<T>;
         (...orders: Order<T>[]): SortedItmod<T>;
     } {
         this.requireSelfNotInfinite("cannot sort infinite items");
@@ -1687,9 +1766,8 @@ export class SortedItmod<T> extends Itmod<T> {
     public get thenBy(): {
         (order: Comparator<T>): SortedItmod<T>;
         (order: FieldSelector<T>): SortedItmod<T>;
-        (order: Field<T>): SortedItmod<T>;
-        (...orders: (Comparator<T> | Field<T>)[]): SortedItmod<T>;
-        (...orders: (FieldSelector<T> | Field<T>)[]): SortedItmod<T>;
+        (...orders: Comparator<T>[]): SortedItmod<T>;
+        (...orders: FieldSelector<T>[]): SortedItmod<T>;
         (...orders: Order<T>[]): SortedItmod<T>;
     } {
         const self = this;
@@ -1708,9 +1786,8 @@ export class SortedItmod<T> extends Itmod<T> {
     public get thenByDescending(): {
         (order: Comparator<T>): SortedItmod<T>;
         (order: FieldSelector<T>): SortedItmod<T>;
-        (order: Field<T>): SortedItmod<T>;
-        (...orders: (Comparator<T> | Field<T>)[]): SortedItmod<T>;
-        (...orders: (FieldSelector<T> | Field<T>)[]): SortedItmod<T>;
+        (...orders: Comparator<T>[]): SortedItmod<T>;
+        (...orders: FieldSelector<T>[]): SortedItmod<T>;
         (...orders: Order<T>[]): SortedItmod<T>;
     } {
         const self = this;

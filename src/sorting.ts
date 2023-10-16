@@ -11,13 +11,9 @@ export type Comparator<T> = (a: T, b: T) => number;
  */
 export type FieldSelector<T> = (t: T) => any;
 /**
- * A field by which to compare values of type T by.
- */
-export type Field<T> = keyof T;
-/**
  * Represents an ordering of values of type T.
  */
-export type Order<T> = Comparator<T> | FieldSelector<T> | Field<T>;
+export type Order<T> = Comparator<T> | FieldSelector<T>;
 
 /**
  * @returns Whether the given {@link Order} is represented by a {@link Comparator}.
@@ -31,13 +27,6 @@ export function isComparator<T>(order: Order<T>): order is Comparator<T> {
  */
 export function isFieldSelector<T>(order: Order<T>): order is FieldSelector<T> {
     return order instanceof Function && order.length < 2;
-}
-
-/**
- * @returns Whether the given {@link Order} is represented by a {@link Field}.
- */
-export function isField<T>(order: Order<T>): order is Field<T> {
-    return !(order instanceof Function);
 }
 
 /**
@@ -90,18 +79,14 @@ export function cmpGE(comparatorResult: number): boolean {
  * @returns The given {@link Order} represented by a {@link Comparator}.
  */
 export function asComparator<T>(order: Order<T>): Comparator<T> {
-    if (order instanceof Function) {
-        if (order.length > 1) {
-            return order as Comparator<T>;
-        } else {
-            return (a: T, b: T) =>
-                autoComparator(
-                    (order as FieldSelector<T>)(a),
-                    (order as FieldSelector<T>)(b)
-                );
-        }
+    if (order.length > 1) {
+        return order as Comparator<T>;
     } else {
-        return (a: T, b: T) => autoComparator(a[order], b[order]);
+        return (a: T, b: T) =>
+            autoComparator(
+                (order as FieldSelector<T>)(a),
+                (order as FieldSelector<T>)(b)
+            );
     }
 }
 

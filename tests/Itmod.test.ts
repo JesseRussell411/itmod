@@ -1442,9 +1442,9 @@ describe("sort", () => {
 
         const sorted = itmod.sort(
             (a: any, b: any) => autoComparator(a.state, b.state),
-            "firstName",
+            (c: any) => c.firstName,
             (c: any) => c.lastName,
-            "age"
+            (c: any) => c.age
         );
         expect(sorted.map((c) => c.state).toArray()).toEqual([
             "fl",
@@ -1613,9 +1613,9 @@ describe("sortDescending", () => {
         const sorted = itmod
             .sortDescending(
                 (a: any, b: any) => autoComparator(a.state, b.state),
-                "firstName",
+                (c: any) => c.firstName,
                 (c: any) => c.lastName,
-                "age"
+                (c: any) => c.age
             )
             .reverse();
         expect(sorted.map((c) => c.state).toArray()).toEqual([
@@ -1724,7 +1724,7 @@ describe("sequenceEqual", () => {
 });
 
 // TODO test for every method in itmod and its children
-// TODO tests for includes, some, every, distinct, defined, notNull, zip, including, makeString, flat, split, partitionBySize, append, prepend
+// TODO tests for includes, some, every, distinct, defined, notNull, zip, including, makeString, flat, split, partitionBySize, append, prepend, min without count and max without count
 
 /*
  * TODO list of special cases to test
