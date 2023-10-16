@@ -28,6 +28,7 @@ console.log("mean:", mean);
 ### Sorting with default behavior that makes sense.
 
 `Itmod.of(1,10, 2, 20, 7, 90, 3).sort().toArray()` => `[1, 2, 3, 7, 10, 20, 90]`
+
 `[1,10, 2, 20, 7, 90, 3].sort()` => `[1, 10, 2, 20, 3, 7, 90]`
 
 ### Converting to and from objects.
