@@ -579,6 +579,38 @@ export default class Itmod<T> implements Iterable<T> {
     }
 
     /**
+     * Concatenates the given {@link Iterable} onto the end of the {@link Itmod}'s iterable.
+     */
+    public get append() {
+        const self = this;
+        return function append<O>(item: O): Itmod<T | O> {
+            return new Itmod(
+                { infinite: self.properties.infinite },
+                function* () {
+                    yield* self;
+                    yield item;
+                }
+            );
+        };
+    }
+
+    /**
+     * Concatenates the given {@link Iterable} onto the start of the {@link Itmod}'s iterable.
+     */
+    public get prepend() {
+        const self = this;
+        return function prepend<O>(item: O): Itmod<T | O> {
+            return new Itmod(
+                { infinite: self.properties.infinite },
+                function* () {
+                    yield item;
+                    yield* self;
+                }
+            );
+        };
+    }
+
+    /**
      * Reverses the items in the {@link Itmod}.
      */
     public get reverse() {
@@ -1288,7 +1320,7 @@ export default class Itmod<T> implements Iterable<T> {
     }
 
     /**
-     * If the {@link Iterable} is an {@link Array}, returns that {@link Set} as readonly; otherwise, copies all the items into an {@link Array} and returns that.
+     * If the {@link Iterable} is an {@link Array}, returns that {@link Array} as readonly; otherwise, copies all the items into an {@link Array} and returns that.
      */
     public get asArray() {
         this.requireSelfNotInfinite(

@@ -1,9 +1,13 @@
 {
   "name": "iterator-modifier",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "A Linq clone. Attempts to be the best Linq clone. Use the from method on the Itmod class to query an iterable.",
   "main": "dist/Itmod.js",
+  "files": [
+    "dist"
+  ],
   "keywords": [
+    "itmod",
     "data",
     "datascience",
     "iterable",
