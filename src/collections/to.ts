@@ -5,9 +5,7 @@ import Collection from "./Collection";
  * @returns The given collection copied into an {@link Array}.
  */
 export function toArray<T>(collection: Iterable<T> | undefined): T[] {
-    if (collection instanceof Itmod) {
-        return collection.toArray();
-    } else if (collection instanceof Collection) {
+    if (collection instanceof Collection || collection instanceof Itmod) {
         return collection.toArray();
     } else if (collection === undefined) {
         return [];

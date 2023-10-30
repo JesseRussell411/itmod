@@ -42,6 +42,7 @@ import MapEntryLike from "./types/MapEntryLike";
 // TODO takeSparse, skipSparse, ifEmpty, partition by count
 
 // TODO? RangeItmod for efficient take, takeFinal, skip, skipFinal, takeEveryNth operations. Result of Itmod.range()
+
 export type Comparison =
     | "equals"
     | "lessThan"
@@ -111,6 +112,8 @@ export default class Itmod<T> implements Iterable<T> {
                     return asIterable(source());
                 }
             );
+        } else if (source instanceof Itmod) {
+            return source;
         } else {
             return new Itmod(properties, returns(asIterable(source)));
         }
@@ -369,6 +372,13 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    public get notNullish() {
+        const self = this;
+        return function notNullish() {
+            return self.notNull().defined();
+        };
+    }
+
     public get zip() {
         const self = this;
         return function zip<O>(
@@ -622,12 +632,7 @@ export default class Itmod<T> implements Iterable<T> {
     public get reverse() {
         const self = this;
         return function reverse(): Itmod<T> {
-            return new Itmod({}, function* () {
-                const array = self.asArray();
-                for (let i = array.length - 1; i >= 0; i--) {
-                    yield array[i] as T;
-                }
-            });
+            return new ReversedItmod(self);
         };
     }
 
@@ -757,8 +762,8 @@ export default class Itmod<T> implements Iterable<T> {
             id: (item: T | O) => any = identity
         ): Itmod<T | O> {
             return new Itmod({}, function* () {
-                const source = self.getSource();
                 if (id === identity) {
+                    const source = self.getSource();
                     let set: ReadonlySet<T | O>;
                     let list: Iterable<T | O>;
 
@@ -784,7 +789,7 @@ export default class Itmod<T> implements Iterable<T> {
                         if (set.has(item)) yield item;
                     }
                 } else {
-                    const set = Itmod.from(source).map(id).asSet();
+                    const set = self.map(id).asSet();
                     for (const item of other) {
                         if (set.has(id(item))) {
                             yield item;
@@ -1711,6 +1716,18 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * Alias for `toMap(keySelector, identity)`
+     */
+    public get indexBy() {
+        const self = this;
+        return function indexBy<K>(
+            keySelector: (item: T, index: number) => K
+        ): Map<K, T> {
+            return self.toMap(keySelector, identity);
+        };
+    }
+
     public get toObject(): {
         (): T extends MapEntryLike<infer K extends keyof any, infer V>
             ? Record<K, V>
@@ -1868,8 +1885,6 @@ export default class Itmod<T> implements Iterable<T> {
      * @param orders How to sort the items. Defaults to {@link autoComparator}.
      */
     public get sort(): {
-        (order: Comparator<T>): SortedItmod<T>;
-        (order: FieldSelector<T>): SortedItmod<T>;
         (...orders: Comparator<T>[]): SortedItmod<T>;
         (...orders: FieldSelector<T>[]): SortedItmod<T>;
         (...orders: Order<T>[]): SortedItmod<T>;
@@ -1888,8 +1903,6 @@ export default class Itmod<T> implements Iterable<T> {
      * @param orders How to sort the items. Defaults to {@link autoComparator}.
      */
     public get sortDescending(): {
-        (order: Comparator<T>): SortedItmod<T>;
-        (order: FieldSelector<T>): SortedItmod<T>;
         (...orders: Comparator<T>[]): SortedItmod<T>;
         (...orders: FieldSelector<T>[]): SortedItmod<T>;
         (...orders: Order<T>[]): SortedItmod<T>;
@@ -1921,17 +1934,12 @@ export default class Itmod<T> implements Iterable<T> {
     }
 
     /**
-     * Internally collapses the iterable into a solid collection like an {@link Array}.
+     * Iterates the Itmod and caches the result. Subsequent iterations iterate this cache instead of using the original source.
      */
     public get collapse() {
         const self = this;
         return function collapse() {
-            const source = self.getSource();
-            if (isSolid(source)) {
-                return Itmod.from(source);
-            } else {
-                return Itmod.from([...source]);
-            }
+            return Itmod.from([...self]);
         };
     }
 
@@ -2026,13 +2034,12 @@ export default class Itmod<T> implements Iterable<T> {
  * An {@link Itmod} with a sort applied to its items. The result of {@link Itmod.sort}.
  */
 export class SortedItmod<T> extends Itmod<T> {
-    private readonly orders: readonly Order<T>[];
-    private readonly comparator: Comparator<T>;
     private readonly original: Itmod<T>;
+    private readonly orders: readonly Order<T>[];
     private readonly config: { preSorted?: boolean };
+    private readonly comparator: Comparator<T>;
     public constructor(
         original: Itmod<T>,
-        // getSource: () => Iterable<T>,
         orders: readonly Order<T>[],
         {
             preSorted = false,
@@ -2053,8 +2060,6 @@ export class SortedItmod<T> extends Itmod<T> {
 
         this.orders = orders;
         this.original = original;
-        // this.originalGetSource = getSource;
-        // this.originalProperties = properties;
 
         const comparators = orders.map(asComparator);
         const comparator = (a: T, b: T) => {
@@ -2072,8 +2077,6 @@ export class SortedItmod<T> extends Itmod<T> {
      * Adds more fallback sorts to the {@link SortedItmod}.
      */
     public get thenBy(): {
-        (order: Comparator<T>): SortedItmod<T>;
-        (order: FieldSelector<T>): SortedItmod<T>;
         (...orders: Comparator<T>[]): SortedItmod<T>;
         (...orders: FieldSelector<T>[]): SortedItmod<T>;
         (...orders: Order<T>[]): SortedItmod<T>;
@@ -2088,8 +2091,6 @@ export class SortedItmod<T> extends Itmod<T> {
      * Adds more fallback sorts to the {@link SortedItmod} in descending order.
      */
     public get thenByDescending(): {
-        (order: Comparator<T>): SortedItmod<T>;
-        (order: FieldSelector<T>): SortedItmod<T>;
         (...orders: Comparator<T>[]): SortedItmod<T>;
         (...orders: FieldSelector<T>[]): SortedItmod<T>;
         (...orders: Order<T>[]): SortedItmod<T>;
@@ -2111,7 +2112,7 @@ export class SortedItmod<T> extends Itmod<T> {
             };
         } else {
             return function take(count: number | bigint) {
-                return self.min(count, self.comparator);
+                return self.original.min(count, self.comparator);
             };
         }
     }
@@ -2124,8 +2125,9 @@ export class SortedItmod<T> extends Itmod<T> {
             };
         } else {
             return function takeFinal(count: number | bigint) {
-                return self.min(count, self.comparator);
+                return self.original.min(count, self.comparator);
             };
+            ``;
         }
     }
 
@@ -2138,40 +2140,33 @@ export class SortedItmod<T> extends Itmod<T> {
 export class MappedItmod<T, R> extends Itmod<R> {
     protected readonly mapping: (value: T, index: number) => R;
     protected readonly original: Itmod<T>;
-    protected readonly config: {
+    protected readonly config: Readonly<{
         indexOffset: number;
-        indexIncrement: number;
-    };
+    }>;
 
     public constructor(
         original: Itmod<T>,
         mapping: (value: T, index: number) => R,
         {
             indexOffset = 0,
-            indexIncrement = 1,
         }: {
             /**
              * Offset added to the index given to the mapping function.
              * @default 0
              */
             indexOffset?: number;
-            /**
-             * How much to increment the index given to the mapping function.
-             * @default 1
-             */
-            indexIncrement?: number;
         } = {}
     ) {
         super({}, function* () {
             let i = indexOffset;
             for (const value of original) {
                 yield mapping(value, i);
-                i += indexIncrement;
+                i++;
             }
         });
         this.mapping = mapping;
         this.original = original;
-        this.config = { indexOffset, indexIncrement };
+        this.config = { indexOffset };
     }
 
     public get take() {
@@ -2192,7 +2187,7 @@ export class MappedItmod<T, R> extends Itmod<R> {
             return new MappedItmod(self.original.skip(count), self.mapping, {
                 ...self.config,
                 // offset the mapping index for the non-skipped items
-                indexOffset: Number(count) + self.config.indexIncrement,
+                indexOffset: self.config.indexOffset + Number(count),
             });
         };
     }
@@ -2298,6 +2293,48 @@ export class MappedItmod<T, R> extends Itmod<R> {
     }
 }
 
+export class ReversedItmod<T> extends Itmod<T> {
+    protected readonly original: Itmod<T>;
+    public constructor(original: Itmod<T>) {
+        super({}, function* () {
+            const source = original.getSource();
+
+            if (source instanceof Collection) {
+                yield* source.reversed();
+            }
+
+            const array = asArray(source);
+            for (let i = array.length - 1; i >= 0; i--) {
+                yield array[i] as T;
+            }
+        });
+        this.original = original;
+    }
+
+    public get reverse() {
+        const self = this;
+        return function reverse() {
+            return self.original;
+        };
+    }
+
+    public get toArray() {
+        const self = this;
+        return function toArray() {
+            const array = self.original.toArray();
+            array.reverse();
+            return array;
+        };
+    }
+
+    public get asArray() {
+        const self = this;
+        return function asArray() {
+            return self.toArray();
+        };
+    }
+}
+
 const _emptyItmod = new Itmod<any>({}, returns(emptyIterable()));
 
 /**
@@ -2353,7 +2390,7 @@ function toMap<T>(
  * @param array What to shuffle.
  * @param getRandomInt Returns a random integer that's greater than or equal to 0 and less than the upperBound. Defaults to using {@link Math.random}, which is not cryptographically secure.
  */
-export function fisherYatesShuffle(
+function fisherYatesShuffle(
     array: any[],
     getRandomInt: (upperBound: number) => number = defaultGetRandomInt
 ): void {
@@ -2398,6 +2435,7 @@ function makeString(
 
     if (typeof collection === "string" && separator === "") {
         // This check may or may not be necessary. I have no way to test if it is.
+        // Other than by testing memory usage maybe? Or can you do a heap dump in javascript?
         if (start === "" && end === "") {
             return collection;
         } else {
