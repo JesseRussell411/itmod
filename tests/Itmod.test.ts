@@ -1724,7 +1724,7 @@ describe("sequenceEqual", () => {
 });
 
 // TODO test for every method in itmod and its children
-// TODO tests for includes, some, every, distinct, defined, notNull, zip, including, makeString, flat, split, partitionBySize, append, prepend, min without count and max without count
+// TODO tests for includes, some, every, distinct, defined, notNull, zip, including, makeString, flat, split, partitionBySize, append, prepend, min without count and max without count, groupJoin, join, innerGroupJoin, innerJoin, union, intersection, difference
 
 /*
  * TODO list of special cases to test

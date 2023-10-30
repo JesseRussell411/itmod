@@ -16,7 +16,6 @@ import {
     range,
 } from "./collections/iterables";
 import { toArray, toSet } from "./collections/to";
-import NeverEndingOperationError from "./errors/NeverEndingOperationError";
 import { identity, resultOf, returns } from "./functional/functions";
 import {
     requireGreaterThanZero,
@@ -40,9 +39,7 @@ import MapEntryLike from "./types/MapEntryLike";
 
 // TODO unit tests
 
-// TODO? remove infinite flag; probably not worth it.
-
-// TODO join, leftJoin, groupJoin, takeSparse, skipSparse, ifEmpty, partition by count
+// TODO takeSparse, skipSparse, ifEmpty, partition by count
 
 // TODO? RangeItmod for efficient take, takeFinal, skip, skipFinal, takeEveryNth operations. Result of Itmod.range()
 export type Comparison =
@@ -65,8 +62,6 @@ export type ItmodProperties<_> = Readonly<
         fresh: boolean;
         /** Calling the source getter is expensive, ie. it's more than an O(1) operation. */
         expensive: boolean;
-        /** Whether the {@link Itmod} is known to never end. False means unknown. */
-        infinite: boolean;
     }>
 >;
 
@@ -78,7 +73,7 @@ export default class Itmod<T> implements Iterable<T> {
      * @returns The {@link Iterable} source.
      */
     public readonly getSource: () => Iterable<T>;
-    protected readonly properties: ItmodProperties<T>;
+    public readonly properties: ItmodProperties<T>;
 
     /**
      * @returns The {@link Iterator}.
@@ -210,7 +205,7 @@ export default class Itmod<T> implements Iterable<T> {
     ): Itmod<T> {
         requireNonNegative(requireIntegerOrInfinity(count));
 
-        return new Itmod({ infinite: count === Infinity }, function* () {
+        return new Itmod({}, function* () {
             let i = zeroLike(count);
             if (generatorOrItem instanceof Function) {
                 for (; i < count; i++) {
@@ -280,29 +275,16 @@ export default class Itmod<T> implements Iterable<T> {
     ): Itmod<number> | Itmod<bigint> {
         if (_end === undefined) {
             const end = _startOrEnd;
-            return new Itmod(
-                { infinite: end === Infinity },
-                returns(range(end))
-            );
+            return new Itmod({}, returns(range(end)));
         } else if (_step === undefined) {
             const start = _startOrEnd;
             const end = _end;
-            return new Itmod(
-                { infinite: end === Infinity },
-                returns(range(start, end))
-            );
+            return new Itmod({}, returns(range(start, end)));
         } else {
             const start = _startOrEnd;
             const end = _end;
             const step = _step;
-            return new Itmod(
-                {
-                    infinite:
-                        (step > 0 && end === Infinity) ||
-                        (step < 0 && end === -Infinity),
-                },
-                returns(range(start, end, step))
-            );
+            return new Itmod({}, returns(range(start, end, step)));
         }
     }
 
@@ -332,7 +314,7 @@ export default class Itmod<T> implements Iterable<T> {
         return function map<R>(
             mapping: (value: T, index: number) => R
         ): Itmod<R> {
-            return new MappedItmod(self.properties, self.getSource, mapping);
+            return new MappedItmod(self, mapping);
         };
     }
 
@@ -363,16 +345,13 @@ export default class Itmod<T> implements Iterable<T> {
         return function filter<R extends T = T>(
             test: (value: T, index: number) => boolean
         ): Itmod<R> {
-            return new Itmod(
-                { infinite: self.properties.infinite },
-                function* () {
-                    let i = 0;
-                    for (const value of self) {
-                        if (test(value, i)) yield value as R;
-                        i++;
-                    }
+            return new Itmod({}, function* () {
+                let i = 0;
+                for (const value of self) {
+                    if (test(value, i)) yield value as R;
+                    i++;
                 }
-            );
+            });
         };
     }
 
@@ -410,7 +389,7 @@ export default class Itmod<T> implements Iterable<T> {
                 let next = iterator.next();
                 let nextOther = iteratorOther.next();
 
-                // really unnecessary but this way next.done only gets pulled once, which might be a good idea if next is designed poorly.
+                // really unnecessary but this way next.done only gets used once, which might be a good idea if next is designed poorly.
                 let nextDone = next.done;
                 let nextDoneOther = nextOther.done;
 
@@ -587,65 +566,53 @@ export default class Itmod<T> implements Iterable<T> {
     }
 
     /**
-     * Concatenates the given {@link Iterable} onto the end of the {@link Itmod}'s iterable.
+     * Concatenates the given {@link Iterable} onto the end of the {@link Itmod}.
      */
     public get concat() {
         const self = this;
         return function concat<O>(other: Iterable<O>): Itmod<T | O> {
-            return new Itmod(
-                { infinite: self.properties.infinite },
-                function* () {
-                    yield* self;
-                    yield* other;
-                }
-            );
+            return new Itmod({}, function* () {
+                yield* self;
+                yield* other;
+            });
         };
     }
     /**
-     * Concatenates the given {@link Iterable} onto the start of the {@link Itmod}'s iterable.
+     * Concatenates the given {@link Iterable} onto the start of the {@link Itmod}.
      */
     public get preConcat() {
         const self = this;
         return function preConcat<O>(other: Iterable<O>): Itmod<T | O> {
-            return new Itmod(
-                { infinite: self.properties.infinite },
-                function* () {
-                    yield* other;
-                    yield* self;
-                }
-            );
+            return new Itmod({}, function* () {
+                yield* other;
+                yield* self;
+            });
         };
     }
 
     /**
-     * Concatenates the given {@link Iterable} onto the end of the {@link Itmod}'s iterable.
+     * Concatenates the given item onto the end of the {@link Itmod}.
      */
     public get append() {
         const self = this;
         return function append<O>(item: O): Itmod<T | O> {
-            return new Itmod(
-                { infinite: self.properties.infinite },
-                function* () {
-                    yield* self;
-                    yield item;
-                }
-            );
+            return new Itmod({}, function* () {
+                yield* self;
+                yield item;
+            });
         };
     }
 
     /**
-     * Concatenates the given {@link Iterable} onto the start of the {@link Itmod}'s iterable.
+     * Concatenates the given item onto the start of the {@link Itmod}.
      */
     public get prepend() {
         const self = this;
         return function prepend<O>(item: O): Itmod<T | O> {
-            return new Itmod(
-                { infinite: self.properties.infinite },
-                function* () {
-                    yield item;
-                    yield* self;
-                }
-            );
+            return new Itmod({}, function* () {
+                yield item;
+                yield* self;
+            });
         };
     }
 
@@ -653,21 +620,14 @@ export default class Itmod<T> implements Iterable<T> {
      * Reverses the items in the {@link Itmod}.
      */
     public get reverse() {
-        this.requireSelfNotInfinite(
-            "cannot reverse an infinite number of values"
-        );
-
         const self = this;
         return function reverse(): Itmod<T> {
-            return new Itmod(
-                { infinite: self.properties.infinite },
-                function* () {
-                    const array = self.asArray();
-                    for (let i = array.length - 1; i >= 0; i--) {
-                        yield array[i] as T;
-                    }
+            return new Itmod({}, function* () {
+                const array = self.asArray();
+                for (let i = array.length - 1; i >= 0; i--) {
+                    yield array[i] as T;
                 }
-            );
+            });
         };
     }
 
@@ -678,40 +638,28 @@ export default class Itmod<T> implements Iterable<T> {
     public get repeat() {
         const self = this;
         return function repeat(times: number | bigint): Itmod<T> {
-            requireIntegerOrInfinity(times);
-            if (typeof times === "number") requireSafeInteger(times);
-            if (times === 0) return Itmod.empty();
             if (times < 0) {
                 return self.reverse().repeat(-times);
             }
 
-            if (self.properties.infinite) {
-                // source is infinite
-                return self;
-            }
-
-            if (times === Infinity) {
-                // repeat infinite times
-                return new Itmod({ infinite: true }, function* () {
-                    const source = self.getSource();
-
-                    const cached = isSolid(source)
-                        ? source
-                        : cachedIterable(source);
-
-                    while (true) {
-                        yield* cached;
-                    }
-                });
-            }
+            requireIntegerOrInfinity(times);
+            if (typeof times === "number") requireSafeInteger(times);
+            if (times === 0) return Itmod.empty();
 
             return new Itmod({}, function* () {
                 const source = self.getSource();
                 const cached = isSolid(source)
                     ? source
                     : cachedIterable(source);
-                for (let i = zeroLike(times); i < times; i++) {
-                    yield* cached;
+
+                if (times === Infinity) {
+                    while (true) {
+                        yield* cached;
+                    }
+                } else {
+                    for (let i = zeroLike(times); i < times; i++) {
+                        yield* cached;
+                    }
                 }
             });
         };
@@ -722,9 +670,28 @@ export default class Itmod<T> implements Iterable<T> {
      */
     public get first() {
         const self = this;
-        return function first() {
+        return function first(): T | undefined {
             for (const item of self) return item;
             return undefined;
+        };
+    }
+
+    /**
+     * @returns The final item or undefined if the source is empty.
+     */
+    public get final() {
+        const self = this;
+        return function final(): T | undefined {
+            const source = self.getSource();
+            if (isArray(source)) {
+                return source.at(-1);
+            } else {
+                let final: T | undefined = undefined;
+                for (const item of source) {
+                    final = item;
+                }
+                return final;
+            }
         };
     }
 
@@ -749,44 +716,111 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
-    public get including(): {
+    public get union(): {
         (other: Iterable<T>): Itmod<T>;
-        <O>(other: Iterable<O>, id: (item: T | O) => any): Itmod<T | O>;
+        <O>(other: Iterable<O>, id?: (item: T | O) => any): Itmod<T | O>;
     } {
         const self = this;
-        return function including<O>(
+        return function union<O>(
             other: Iterable<O>,
-            id?: (item: T | O) => any
+            id: (item: T | O) => any = identity
         ): Itmod<T | O> {
-            if (self.properties.infinite) return self as Itmod<T | O>;
-            if (other instanceof Itmod && other.properties.infinite) {
-                return new Itmod({ infinite: true }, function* () {
-                    yield* self;
-                    yield* other;
-                });
-            }
-            if (id === undefined) {
-                return new Itmod({}, function* () {
-                    const toInclude = new Set(other);
-                    for (const item of self) {
+            return new Itmod({}, function* () {
+                const source = self.getSource();
+
+                if (id === identity) {
+                    const toAdd = new Set<T | O>(other);
+                    for (const item of source) {
                         yield item;
-                        toInclude.delete(item as any);
+                        toAdd.delete(item);
                     }
-                    yield* toInclude;
-                });
-            } else {
-                return new Itmod({}, function* () {
-                    const toInclude = new Map<any, O>();
+                    yield* toAdd;
+                } else {
+                    const toAdd = Itmod.from(other).toMap(id, identity);
+                    for (const item of source) {
+                        yield item;
+                        toAdd.delete(id(item));
+                    }
+                    yield* toAdd.values();
+                }
+            });
+        };
+    }
+
+    public get intersection(): {
+        (other: Iterable<T>): Itmod<T>;
+        <O>(other: Iterable<O>, id?: (item: T | O) => any): Itmod<T | O>;
+    } {
+        const self = this;
+        return function intersection<O>(
+            other: Iterable<O>,
+            id: (item: T | O) => any = identity
+        ): Itmod<T | O> {
+            return new Itmod({}, function* () {
+                const source = self.getSource();
+                if (id === identity) {
+                    let set: ReadonlySet<T | O>;
+                    let list: Iterable<T | O>;
+
+                    const otherIsSet = isSet(other);
+
+                    if (isSet(source) && otherIsSet) {
+                        if (source.size > other.size) {
+                            set = source;
+                            list = other;
+                        } else {
+                            list = source;
+                            set = other;
+                        }
+                    } else if (otherIsSet) {
+                        set = other;
+                        list = source;
+                    } else {
+                        set = asSet(source);
+                        list = other;
+                    }
+
+                    for (const item of list) {
+                        if (set.has(item)) yield item;
+                    }
+                } else {
+                    const set = Itmod.from(source).map(id).asSet();
                     for (const item of other) {
-                        toInclude.set(id(item), item);
+                        if (set.has(id(item))) {
+                            yield item;
+                        }
                     }
+                }
+            });
+        };
+    }
+
+    public get difference(): {
+        (other: Iterable<T>): Itmod<T>;
+        <O>(other: Iterable<O>, id?: (item: T | O) => any): Itmod<T | O>;
+    } {
+        const self = this;
+        return function difference<O>(
+            other: Iterable<O>,
+            id: (item: T | O) => any = identity
+        ): Itmod<T> {
+            return new Itmod({}, function* () {
+                if (id === identity) {
+                    const set = asSet<T | O>(other);
                     for (const item of self) {
-                        yield item;
-                        toInclude.delete(id(item));
+                        if (!set.has(item)) {
+                            yield item;
+                        }
                     }
-                    yield* toInclude.values();
-                });
-            }
+                } else {
+                    const set = Itmod.from(other).map(id).asSet();
+                    for (const item of self) {
+                        if (!set.has(id(item))) {
+                            yield item;
+                        }
+                    }
+                }
+            });
         };
     }
 
@@ -795,16 +829,16 @@ export default class Itmod<T> implements Iterable<T> {
      */
     public get take() {
         const self = this;
-        const externalTake = take;
         return function take(count: number | bigint): Itmod<T> {
             requireIntegerOrInfinity(requireNonNegative(count));
             return new Itmod(
                 {
-                    fresh: self.properties.expensive,
+                    fresh: self.properties.fresh,
                     expensive: self.properties.expensive,
                 },
                 () => {
                     const source = self.getSource();
+                    if (count === Infinity) return source;
 
                     // optimization for fresh array
                     if (self.properties.fresh && isArrayAsWritable(source)) {
@@ -812,7 +846,25 @@ export default class Itmod<T> implements Iterable<T> {
                         return source;
                     }
 
-                    return externalTake(count, source);
+                    if (isZero(count)) return emptyIterable();
+
+                    const size = nonIteratedCountOrUndefined(source);
+
+                    if (size !== undefined && count >= size) {
+                        return source;
+                    }
+
+                    return {
+                        *[Symbol.iterator]() {
+                            const iterator = source[Symbol.iterator]();
+                            for (let i = zeroLike(count); i < count; i++) {
+                                const next = iterator.next();
+                                if (next.done) break;
+
+                                yield next.value;
+                            }
+                        },
+                    };
                 }
             );
         };
@@ -823,10 +875,38 @@ export default class Itmod<T> implements Iterable<T> {
      */
     public get skip() {
         const self = this;
-        const externalSkip = skip;
         return function skip(count: number | bigint): Itmod<T> {
             requireIntegerOrInfinity(requireNonNegative(count));
-            return new Itmod({}, () => externalSkip(count, self.getSource()));
+            return new Itmod({}, function* () {
+                const source = self.getSource();
+
+                if (isZero(count)) return source;
+                if (count === Infinity) return emptyIterable();
+
+                const size = nonIteratedCountOrUndefined(source);
+                if (size !== undefined && count >= size) return emptyIterable();
+
+                if (isArray(source)) {
+                    const numberCount = Number(count);
+                    if (numberCount === Infinity) return emptyIterable();
+                    for (let i = numberCount; i < source.length; i++) {
+                        yield source[i] as T;
+                    }
+                } else {
+                    const iterator = source[Symbol.iterator]();
+                    let next = iterator.next();
+
+                    for (let i = zeroLike(count); i < count; i++) {
+                        if (next.done) return;
+                        next = iterator.next();
+                    }
+
+                    while (!next.done) {
+                        yield next.value;
+                        next = iterator.next();
+                    }
+                }
+            });
         };
     }
 
@@ -835,12 +915,22 @@ export default class Itmod<T> implements Iterable<T> {
      */
     public get takeFinal() {
         const self = this;
-        const externalTakeFinal = takeFinal;
-        return function takeFinal(count: number | bigint) {
+        return function takeFinal(count: number | bigint): Itmod<T> {
             requireIntegerOrInfinity(requireNonNegative(count));
-            return new Itmod({}, () =>
-                externalTakeFinal(count, self.getSource())
-            );
+            return new Itmod({ fresh: true, expensive: true }, () => {
+                const source = self.getSource();
+                if (count === Infinity) return source;
+                if (isZero(count)) return emptyIterable();
+
+                // TODO break out skip for an optimization here
+
+                const buffer = new CircularBuffer<T>(Number(count));
+                for (const value of source) {
+                    buffer.push(value);
+                }
+
+                return buffer;
+            });
         };
     }
 
@@ -849,28 +939,45 @@ export default class Itmod<T> implements Iterable<T> {
      */
     public get skipFinal() {
         const self = this;
-        const externalSkipFinal = skipFinal;
-        return function skipFinal(count: number | bigint) {
+        return function skipFinal(count: number | bigint): Itmod<T> {
             requireIntegerOrInfinity(requireNonNegative(count));
-            return new Itmod({}, () =>
-                externalSkipFinal(count, self.getSource())
-            );
+            return new Itmod({}, function* () {
+                const source = self.getSource();
+                if (count === Infinity) return emptyIterable();
+                if (isZero(count)) return source;
+                // TODO break out take for an optimization here
+
+                const buffer = new CircularBuffer<T>(Number(count));
+
+                for (const item of source) {
+                    if (buffer.isFull) yield buffer.at(0) as T;
+                    buffer.push(item);
+                }
+            });
         };
     }
 
     public get takeEveryNth() {
-        const externalTakeEveryNth = takeEveryNth;
         const self = this;
         return function takeEveryNth(n: number | bigint): Itmod<T> {
-            return new Itmod<T>(
-                { infinite: self.properties.infinite && n !== Infinity },
-                () => externalTakeEveryNth(n, self.getSource())
-            );
+            return new Itmod<T>({}, function* () {
+                const source = self.getSource();
+                if (n === Infinity) return emptyIterable();
+                if (isOne(n)) return source;
+
+                let i = zeroLike(n);
+                for (const item of source) {
+                    i++;
+                    if (i >= n) {
+                        yield item;
+                        i = zeroLike(n);
+                    }
+                }
+            });
         };
     }
 
     public get takeWhile() {
-        const externalTakeWhile = takeWhile;
         const self = this;
         return function takeWhile(
             condition: (item: T, index: number) => boolean
@@ -894,61 +1001,83 @@ export default class Itmod<T> implements Iterable<T> {
                         return source;
                     }
 
-                    return externalTakeWhile(condition, source);
+                    return {
+                        *[Symbol.iterator]() {
+                            let i = 0;
+                            for (const item of source) {
+                                if (!condition(item, i)) break;
+                                yield item;
+                                i++;
+                            }
+                        },
+                    };
                 }
             );
         };
     }
 
     public get takeRandom() {
-        const externalTakeRandom = takeRandom;
         const self = this;
         return function takeRandom(
             count: number | bigint,
             getRandomInt?: (upperBound: number) => number
         ) {
-            requireIntegerOrInfinity(requireNonNegative(count));
-            return new Itmod(
-                { infinite: self.properties.infinite && count === Infinity },
-                () => externalTakeRandom(count, self.getSource(), getRandomInt)
-            );
+            return self.shuffle(getRandomInt).take(count);
         };
     }
 
     public get skipEveryNth() {
-        const externalSkipEveryNth = skipEveryNth;
         const self = this;
         return function skipEveryNth(n: number | bigint): Itmod<T> {
-            return new Itmod<T>({ infinite: self.properties.infinite }, () =>
-                externalSkipEveryNth(n, self.getSource())
-            );
+            return new Itmod<T>({}, function* () {
+                const source = self.getSource();
+                if (n === Infinity) return emptyIterable();
+                if (isOne(n)) return source;
+
+                let i = zeroLike(n);
+                for (const item of source) {
+                    i++;
+                    if (i >= n) {
+                        yield item;
+                        i = zeroLike(n);
+                    }
+                }
+            });
         };
     }
 
     public get skipWhile() {
-        const externalSkipWhile = skipWhile;
         const self = this;
         return function skipWhile(
             condition: (item: T, index: number) => boolean
         ): Itmod<T> {
-            return new Itmod({}, () =>
-                externalSkipWhile(self.getSource(), condition)
-            );
+            return new Itmod({}, function* () {
+                const source = self.getSource();
+                const iterator = source[Symbol.iterator]();
+
+                let next = iterator.next();
+                let i = 0;
+                while (!next.done) {
+                    if (!condition(next.value, i)) break;
+                    next = iterator.next();
+                    i++;
+                }
+
+                while (!next.done) {
+                    yield next.value;
+                    next = iterator.next();
+                }
+            });
         };
     }
 
     public get skipRandom() {
-        const externalSkipRandom = skipRandom;
         const self = this;
         return function skipRandom(
             count: number | bigint,
             getRandomInt?: (upperBound: number) => number
         ) {
-            requireIntegerOrInfinity(requireNonNegative(count));
-            return new Itmod(
-                { infinite: self.properties.infinite && count === Infinity },
-                () => externalSkipRandom(count, self.getSource(), getRandomInt)
-            );
+            return self.shuffle(getRandomInt).skip(count);
         };
     }
 
@@ -1004,7 +1133,9 @@ export default class Itmod<T> implements Iterable<T> {
 
     public get some() {
         const self = this;
-        return function some(condition: (item: T, index: number) => boolean) {
+        return function some(
+            condition: (item: T, index: number) => boolean
+        ): boolean {
             let i = 0;
             for (const item of self) {
                 if (condition(item, i)) return true;
@@ -1014,9 +1145,20 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    public get none() {
+        const self = this;
+        return function none(
+            condition: (item: T, index: number) => boolean
+        ): boolean {
+            return !self.some(condition);
+        };
+    }
+
     public get every() {
         const self = this;
-        return function every(condition: (item: T, index: number) => boolean) {
+        return function every(
+            condition: (item: T, index: number) => boolean
+        ): boolean {
             let i = 0;
             for (const item of self) {
                 if (!condition(item, i)) return false;
@@ -1072,9 +1214,6 @@ export default class Itmod<T> implements Iterable<T> {
          */
         (order?: Order<T>): T | undefined;
     } {
-        this.requireSelfNotInfinite(
-            "cannot get the largest of infinite values"
-        );
         const self = this;
         function min(count: number | bigint, order?: Order<T>): Itmod<T>;
         function min(order?: Order<T>): T | undefined;
@@ -1126,9 +1265,6 @@ export default class Itmod<T> implements Iterable<T> {
          */
         (order?: Order<T>): T | undefined;
     } {
-        this.requireSelfNotInfinite(
-            "cannot get the largest of infinite values"
-        );
         const self = this;
         function max(count: number | bigint, order?: Order<T>): Itmod<T>;
         function max(order?: Order<T>): T | undefined;
@@ -1177,35 +1313,14 @@ export default class Itmod<T> implements Iterable<T> {
         ): Itmod<[key: K, group: G]>;
     } {
         const self = this;
+        const externalGroupBy = groupBy;
         return function groupBy<K>(
             keySelector: (item: T, index: number) => K,
             groupSelector?: (group: T[]) => any
-        ): Itmod<[key: K, group: any]> {
-            return new Itmod({ expensive: true, fresh: true }, () => {
-                const groups = new Map<K, any>();
-
-                let i = 0;
-
-                for (const item of self) {
-                    const key = keySelector(item, i);
-                    const group = groups.get(key) as T[];
-                    if (group !== undefined) {
-                        group.push(item);
-                    } else {
-                        groups.set(key, [item]);
-                    }
-                    i++;
-                }
-
-                if (groupSelector !== undefined) {
-                    for (const entry of groups) {
-                        const group = groupSelector(entry[1]);
-                        groups.set(entry[0], group);
-                    }
-                }
-
-                return groups;
-            });
+        ) {
+            return new Itmod({ fresh: true, expensive: true }, () =>
+                externalGroupBy(self, keySelector, groupSelector)
+            );
         };
     }
 
@@ -1223,7 +1338,7 @@ export default class Itmod<T> implements Iterable<T> {
             equalityChecker?: (a: T, b: O) => boolean
         ) {
             return new Itmod(
-                { infinite: self.properties.infinite },
+                {},
                 returns(externalSplit(self, deliminator, equalityChecker))
             );
         };
@@ -1266,11 +1381,256 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    public get groupJoin(): {
+        <I, K, R>(
+            inner: Iterable<I>,
+            outerKeySelector: (item: T) => K,
+            innerKeySelector: (item: I) => K,
+            resultSelector: (outer: T, innerGroup: I[]) => R
+        ): Itmod<R>;
+        <I, R>(
+            inner: Iterable<I>,
+            is: (outer: T, inner: I) => boolean,
+            resultSelector: (outer: T, innerGroup: I[]) => R
+        ): Itmod<R>;
+    } {
+        const self = this;
+        return function groupJoin<I, K, R>(
+            ...args:
+                | [
+                      inner: Iterable<I>,
+                      outerKeySelector: (item: T) => K,
+                      innerKeySelector: (item: I) => K,
+                      resultSelector: (outer: T, innerGroup: I[]) => any
+                  ]
+                | [
+                      inner: Iterable<I>,
+                      is: (outer: T, inner: I) => boolean,
+                      resultSelector: (outer: T, innerGroup: I[]) => any
+                  ]
+        ) {
+            if (args.length === 3) {
+                const [inner, is, resultSelector] = args;
+                return new Itmod({}, () => {
+                    return groupJoinByComparison(
+                        self,
+                        inner,
+                        is,
+                        resultSelector,
+                        false
+                    );
+                });
+            } else {
+                const [
+                    inner,
+                    outerKeySelector,
+                    innerKeySelector,
+                    resultSelector,
+                ] = args;
+                return new Itmod({}, () => {
+                    return groupJoinByKey(
+                        self,
+                        inner,
+                        outerKeySelector,
+                        innerKeySelector,
+                        resultSelector,
+                        false
+                    );
+                });
+            }
+        };
+    }
+
+    public get innerGroupJoin(): {
+        <I, K, R>(
+            inner: Iterable<I>,
+            outerKeySelector: (item: T) => K,
+            innerKeySelector: (item: I) => K,
+            resultSelector: (outer: T, innerGroup: I[]) => R
+        ): Itmod<R>;
+        <I, R>(
+            inner: Iterable<I>,
+            is: (outer: T, inner: I) => boolean,
+            resultSelector: (outer: T, innerGroup: I[]) => R
+        ): Itmod<R>;
+    } {
+        const self = this;
+        return function groupJoin<I, K, R>(
+            ...args:
+                | [
+                      inner: Iterable<I>,
+                      outerKeySelector: (item: T) => K,
+                      innerKeySelector: (item: I) => K,
+                      resultSelector: (outer: T, innerGroup: I[]) => any
+                  ]
+                | [
+                      inner: Iterable<I>,
+                      is: (outer: T, inner: I) => boolean,
+                      resultSelector: (outer: T, innerGroup: I[]) => any
+                  ]
+        ) {
+            if (args.length === 3) {
+                const [inner, is, resultSelector] = args;
+                return new Itmod({}, () => {
+                    return groupJoinByComparison(
+                        self,
+                        inner,
+                        is,
+                        resultSelector,
+                        true
+                    );
+                });
+            } else {
+                const [
+                    inner,
+                    outerKeySelector,
+                    innerKeySelector,
+                    resultSelector,
+                ] = args;
+                return new Itmod({}, () => {
+                    return groupJoinByKey(
+                        self,
+                        inner,
+                        outerKeySelector,
+                        innerKeySelector,
+                        resultSelector,
+                        true
+                    );
+                });
+            }
+        };
+    }
+
+    public get join(): {
+        <I, K, R>(
+            inner: Iterable<I>,
+            outerKeySelector: (item: T) => K,
+            innerKeySelector: (item: I) => K,
+            resultSelector: (outer: T, innerGroup: I | undefined) => R
+        ): Itmod<R>;
+        <I, R>(
+            inner: Iterable<I>,
+            is: (outer: T, inner: I) => boolean,
+            resultSelector: (outer: T, innerGroup: I | undefined) => R
+        ): Itmod<R>;
+    } {
+        const self = this;
+        return function join<I, K, R>(
+            ...args:
+                | [
+                      inner: Iterable<I>,
+                      outerKeySelector: (item: T) => K,
+                      innerKeySelector: (item: I) => K,
+                      resultSelector: (outer: T, innerGroup: I | undefined) => R
+                  ]
+                | [
+                      inner: Iterable<I>,
+                      is: (outer: T, inner: I) => boolean,
+                      resultSelector: (outer: T, innerGroup: I | undefined) => R
+                  ]
+        ) {
+            if (args.length === 3) {
+                const [inner, is, resultSelector] = args;
+                return new Itmod({}, () => {
+                    return joinByComparison(
+                        self,
+                        inner,
+                        is,
+                        resultSelector,
+                        false
+                    );
+                });
+            } else {
+                const [
+                    inner,
+                    outerKeySelector,
+                    innerKeySelector,
+                    resultSelector,
+                ] = args;
+                return new Itmod({}, () => {
+                    return joinByKey(
+                        self,
+                        inner,
+                        outerKeySelector,
+                        innerKeySelector,
+                        resultSelector,
+                        false
+                    );
+                });
+            }
+        };
+    }
+
+    public get innerJoin(): {
+        <I, K, R>(
+            inner: Iterable<I>,
+            outerKeySelector: (item: T) => K,
+            innerKeySelector: (item: I) => K,
+            resultSelector: (outer: T, innerGroup: I | undefined) => R
+        ): Itmod<R>;
+        <I, R>(
+            inner: Iterable<I>,
+            is: (outer: T, inner: I) => boolean,
+            resultSelector: (outer: T, innerGroup: I | undefined) => R
+        ): Itmod<R>;
+    } {
+        const self = this;
+        return function join<I, K, R>(
+            ...args:
+                | [
+                      inner: Iterable<I>,
+                      outerKeySelector: (item: T) => K,
+                      innerKeySelector: (item: I) => K,
+                      resultSelector: (
+                          outer: T,
+                          innerGroup: I | undefined
+                      ) => any
+                  ]
+                | [
+                      inner: Iterable<I>,
+                      is: (outer: T, inner: I) => boolean,
+                      resultSelector: (
+                          outer: T,
+                          innerGroup: I | undefined
+                      ) => any
+                  ]
+        ) {
+            if (args.length === 3) {
+                const [inner, is, resultSelector] = args;
+                return new Itmod({}, () => {
+                    return joinByComparison(
+                        self,
+                        inner,
+                        is,
+                        resultSelector,
+                        true
+                    );
+                });
+            } else {
+                const [
+                    inner,
+                    outerKeySelector,
+                    innerKeySelector,
+                    resultSelector,
+                ] = args;
+                return new Itmod({}, () => {
+                    return joinByKey(
+                        self,
+                        inner,
+                        outerKeySelector,
+                        innerKeySelector,
+                        resultSelector,
+                        true
+                    );
+                });
+            }
+        };
+    }
+
     /**
      * Copies all the items into an {@link Array}.
      */
     public get toArray() {
-        this.requireSelfNotInfinite("cannot copy infinite items into an array");
         const self = this;
         const externalToArray = toArray;
         return function toArray(): T[] {
@@ -1287,7 +1647,6 @@ export default class Itmod<T> implements Iterable<T> {
      * Copies all the items into a {@link Set}.
      */
     public get toSet() {
-        this.requireSelfNotInfinite("cannot copy infinite items into a set");
         const self = this;
         const externalToSet = toSet;
         return function toSet(): Set<T> {
@@ -1333,7 +1692,6 @@ export default class Itmod<T> implements Iterable<T> {
             valueSelector: (item: T, index: number) => V
         ): Map<K, V>;
     } {
-        this.requireSelfNotInfinite("cannot copy infinite items into a map");
         const self = this;
         const externalToMap = toMap;
         return function toMap(
@@ -1374,9 +1732,6 @@ export default class Itmod<T> implements Iterable<T> {
             valueSelector: (item: T, index: number) => V
         ): Record<K, V>;
     } {
-        this.requireSelfNotInfinite(
-            "cannot copy infinite items into an object"
-        );
         const self = this;
         return function toObject<K, V>(
             keySelector: (item: T, index: number) => any = (item: any) =>
@@ -1404,9 +1759,6 @@ export default class Itmod<T> implements Iterable<T> {
      * If the {@link Iterable} is an {@link Array}, returns that {@link Array} as readonly; otherwise, copies all the items into an {@link Array} and returns that.
      */
     public get asArray() {
-        this.requireSelfNotInfinite(
-            "cannot represent infinite items as an array"
-        );
         const self = this;
         const externalAsArray = asArray;
         return function asArray(): readonly T[] {
@@ -1416,10 +1768,9 @@ export default class Itmod<T> implements Iterable<T> {
     }
 
     /**
-     * If the {@link Iterable} is a {@link Set}, returns that {@link Set}] as readonly; otherwise, copies all the items into a {@link Set} and returns that.
+     * If the {@link Iterable} is a {@link Set}, returns that {@link Set} as readonly; otherwise, copies all the items into a {@link Set} and returns that.
      */
     public get asSet() {
-        this.requireSelfNotInfinite("cannot represent infinite items as a set");
         const self = this;
         const externalAsSet = asSet;
         return function asSet(): ReadonlySet<T> {
@@ -1463,7 +1814,6 @@ export default class Itmod<T> implements Iterable<T> {
             valueSelector: (item: T, index: number) => V
         ): ReadonlyMap<K, V>;
     } {
-        this.requireSelfNotInfinite("cannot represent infinite items as a map");
         const self = this;
         return function asMap(
             keySelector?: (item: T, index: number) => any,
@@ -1502,9 +1852,6 @@ export default class Itmod<T> implements Iterable<T> {
             valueSelector: (item: T, index: number) => V
         ): Readonly<Record<K, V>>;
     } {
-        this.requireSelfNotInfinite(
-            "cannot represent infinite items as an object"
-        );
         const self = this;
         return function asObject(
             keySelector: (item: T, index: number) => any = (item: any) =>
@@ -1527,12 +1874,10 @@ export default class Itmod<T> implements Iterable<T> {
         (...orders: FieldSelector<T>[]): SortedItmod<T>;
         (...orders: Order<T>[]): SortedItmod<T>;
     } {
-        this.requireSelfNotInfinite("cannot sort infinite items");
         const self = this;
         return function sort(...orders: Order<T>[]): SortedItmod<T> {
             return new SortedItmod(
-                self.properties,
-                self.getSource,
+                self,
                 orders.length === 0 ? [autoComparator] : orders
             );
         };
@@ -1549,12 +1894,10 @@ export default class Itmod<T> implements Iterable<T> {
         (...orders: FieldSelector<T>[]): SortedItmod<T>;
         (...orders: Order<T>[]): SortedItmod<T>;
     } {
-        this.requireSelfNotInfinite("cannot sort infinite items");
         const self = this;
         return function sortDescending(...orders: Order<T>[]): SortedItmod<T> {
             return new SortedItmod(
-                self.properties,
-                self.getSource,
+                self,
                 orders.length === 0
                     ? [reverseOrder(autoComparator)]
                     : orders.map(reverseOrder)
@@ -1567,7 +1910,6 @@ export default class Itmod<T> implements Iterable<T> {
      * @param getRandomInt Returns a random integer that's greater than or equal to 0 and less than upperBound. Defaults to using {@link Math.random}, which is not cryptographically secure.
      */
     public get shuffle() {
-        this.requireSelfNotInfinite("cannot shuffle infinite items");
         const self = this;
         return function shuffle(getRandomInt?: (upperBound: number) => number) {
             return new Itmod({ fresh: true, expensive: true }, () => {
@@ -1582,7 +1924,6 @@ export default class Itmod<T> implements Iterable<T> {
      * Internally collapses the iterable into a solid collection like an {@link Array}.
      */
     public get collapse() {
-        this.requireSelfNotInfinite("cannot collapse infinite items");
         const self = this;
         return function collapse() {
             const source = self.getSource();
@@ -1610,19 +1951,6 @@ export default class Itmod<T> implements Iterable<T> {
              */
             is: (a: T, b: O) => boolean = (a, b) => Object.is(a, b)
         ) {
-            if (other instanceof Itmod) {
-                if (
-                    !!self.properties.infinite !== !!other.properties.infinite
-                ) {
-                    return false;
-                }
-
-                if (self.properties.infinite && other.properties.infinite) {
-                    throw new NeverEndingOperationError(
-                        "cannot check if two infinite sequences are equal"
-                    );
-                }
-            }
             const source = self.getSource();
 
             // try to check size
@@ -1676,10 +2004,6 @@ export default class Itmod<T> implements Iterable<T> {
         return function makeString(
             ...args: [any, any, any] | [any, any] | [any] | []
         ): string {
-            self.requireSelfNotInfinite(
-                "cannot collect infinite items into a string"
-            );
-
             if (args.length === 0) {
                 return externalMakeString(self.getSource());
             } else if (args.length === 1) {
@@ -1696,15 +2020,6 @@ export default class Itmod<T> implements Iterable<T> {
             }
         };
     }
-
-    /**
-     * Requires the {@link Itmod} to not be known to be infinite.
-     */
-    private requireSelfNotInfinite(errorMessage: string | (() => string)) {
-        if (this.properties.infinite) {
-            throw new NeverEndingOperationError(resultOf(errorMessage));
-        }
-    }
 }
 
 /**
@@ -1713,12 +2028,11 @@ export default class Itmod<T> implements Iterable<T> {
 export class SortedItmod<T> extends Itmod<T> {
     private readonly orders: readonly Order<T>[];
     private readonly comparator: Comparator<T>;
-    private readonly originalGetSource: () => Iterable<T>;
-    private readonly originalProperties: ItmodProperties<T>;
+    private readonly original: Itmod<T>;
     private readonly config: { preSorted?: boolean };
     public constructor(
-        properties: ItmodProperties<T>,
-        getSource: () => Iterable<T>,
+        original: Itmod<T>,
+        // getSource: () => Iterable<T>,
         orders: readonly Order<T>[],
         {
             preSorted = false,
@@ -1727,26 +2041,20 @@ export class SortedItmod<T> extends Itmod<T> {
             preSorted?: boolean;
         } = {}
     ) {
-        super(
-            preSorted ? properties : { fresh: true, expensive: true },
-            preSorted
-                ? getSource
-                : () => {
-                      const source = getSource();
-                      const array =
-                          properties.fresh && isArrayAsWritable(source)
-                              ? source
-                              : [...source];
-
-                      array.sort(comparator);
-
-                      return array;
-                  }
-        );
+        if (preSorted) {
+            super(original.properties, original.getSource);
+        } else {
+            super({ fresh: true, expensive: true }, () => {
+                const array = original.toArray();
+                array.sort(comparator);
+                return array;
+            });
+        }
 
         this.orders = orders;
-        this.originalGetSource = getSource;
-        this.originalProperties = properties;
+        this.original = original;
+        // this.originalGetSource = getSource;
+        // this.originalProperties = properties;
 
         const comparators = orders.map(asComparator);
         const comparator = (a: T, b: T) => {
@@ -1772,11 +2080,7 @@ export class SortedItmod<T> extends Itmod<T> {
     } {
         const self = this;
         return function thenBy(...orders: Order<T>[]): SortedItmod<T> {
-            return new SortedItmod(
-                self.originalProperties,
-                self.originalGetSource,
-                [...self.orders, ...orders]
-            );
+            return new SortedItmod(self.original, [...self.orders, ...orders]);
         };
     }
 
@@ -1792,26 +2096,37 @@ export class SortedItmod<T> extends Itmod<T> {
     } {
         const self = this;
         return function thenBy(...orders: Order<T>[]): SortedItmod<T> {
-            return new SortedItmod(
-                self.originalProperties,
-                self.originalGetSource,
-                [...self.orders, ...orders.map(reverseOrder)]
-            );
+            return new SortedItmod(self.original, [
+                ...self.orders,
+                ...orders.map(reverseOrder),
+            ]);
         };
     }
 
     public get take() {
         const self = this;
-        return function take(count: number | bigint) {
-            return self.min(count, self.comparator);
-        };
+        if (self.config.preSorted) {
+            return function take(count: number | bigint) {
+                return self.original.take(count);
+            };
+        } else {
+            return function take(count: number | bigint) {
+                return self.min(count, self.comparator);
+            };
+        }
     }
 
     public get takeFinal() {
         const self = this;
-        return function takeFinal(count: number | bigint) {
-            return self.max(count, self.comparator);
-        };
+        if (self.config.preSorted) {
+            return function takeFinal(count: number | bigint) {
+                return self.original.take(count);
+            };
+        } else {
+            return function takeFinal(count: number | bigint) {
+                return self.min(count, self.comparator);
+            };
+        }
     }
 
     // TODO skip and skipFinal
@@ -1822,16 +2137,14 @@ export class SortedItmod<T> extends Itmod<T> {
  */
 export class MappedItmod<T, R> extends Itmod<R> {
     protected readonly mapping: (value: T, index: number) => R;
-    protected readonly originalGetSource: () => Iterable<T>;
-    protected readonly originalProperties: ItmodProperties<T>;
+    protected readonly original: Itmod<T>;
     protected readonly config: {
         indexOffset: number;
         indexIncrement: number;
     };
 
     public constructor(
-        properties: ItmodProperties<T>,
-        getSource: () => Iterable<T>,
+        original: Itmod<T>,
         mapping: (value: T, index: number) => R,
         {
             indexOffset = 0,
@@ -1849,28 +2162,24 @@ export class MappedItmod<T, R> extends Itmod<R> {
             indexIncrement?: number;
         } = {}
     ) {
-        super({ infinite: properties.infinite }, function* () {
-            const source = getSource();
+        super({}, function* () {
             let i = indexOffset;
-            for (const value of source) {
+            for (const value of original) {
                 yield mapping(value, i);
                 i += indexIncrement;
             }
         });
         this.mapping = mapping;
-        this.originalGetSource = getSource;
-        this.originalProperties = properties;
+        this.original = original;
         this.config = { indexOffset, indexIncrement };
     }
 
     public get take() {
         const self = this;
-        const externalTake = take;
-        return function take(count: number | bigint) {
+        return function take(count: number | bigint): Itmod<R> {
             // no need to adjust indexes for take.
             return new MappedItmod(
-                self.originalProperties,
-                () => externalTake(count, self.originalGetSource()),
+                self.original.take(count),
                 self.mapping,
                 self.config
             );
@@ -1879,18 +2188,12 @@ export class MappedItmod<T, R> extends Itmod<R> {
 
     public get skip() {
         const self = this;
-        const externalSkip = skip;
         return function skip(count: number | bigint): Itmod<R> {
-            return new MappedItmod(
-                self.originalProperties,
-                () => externalSkip(count, self.originalGetSource()),
-                self.mapping,
+            return new MappedItmod(self.original.skip(count), self.mapping, {
+                ...self.config,
                 // offset the mapping index for the non-skipped items
-                {
-                    ...self.config,
-                    indexOffset: Number(count) + self.config.indexIncrement,
-                }
-            );
+                indexOffset: Number(count) + self.config.indexIncrement,
+            });
         };
     }
 
@@ -1898,24 +2201,16 @@ export class MappedItmod<T, R> extends Itmod<R> {
     // If it doesn't. It is safe to take or skip before mapping without doing anything to adjust the index.
     // TODO find ways to make the index correct when needed without just mapping first.
 
-    // There's no overload for take because take then map already has optimal behavior.
-
     public get takeFinal() {
         const self = this;
         const parentTakeFinal = super.takeFinal;
-        const externalTakeFinal = takeFinal;
         return function takeFinal(count: number | bigint): Itmod<R> {
             // check if mapping function uses the index.
             if (self.mapping.length >= 2) {
                 return parentTakeFinal(count);
             } else {
                 return new MappedItmod(
-                    {
-                        ...self.originalProperties,
-                        expensive: true,
-                        fresh: true,
-                    },
-                    () => externalTakeFinal(count, self.originalGetSource()),
+                    self.original.takeFinal(count),
                     self.mapping
                 );
             }
@@ -1924,7 +2219,6 @@ export class MappedItmod<T, R> extends Itmod<R> {
 
     public get skipFinal() {
         const self = this;
-        const externalSkipFinal = skipFinal;
         const parentSkipFinal = super.skipFinal;
         return function skipFinal(count: number | bigint): Itmod<R> {
             // check if mapping function uses the index.
@@ -1932,8 +2226,7 @@ export class MappedItmod<T, R> extends Itmod<R> {
                 return parentSkipFinal(count);
             } else {
                 return new MappedItmod(
-                    self.originalProperties,
-                    () => externalSkipFinal(count, self.originalGetSource()),
+                    self.original.skipFinal(count),
                     self.mapping
                 );
             }
@@ -1942,7 +2235,6 @@ export class MappedItmod<T, R> extends Itmod<R> {
 
     public get takeEveryNth() {
         const self = this;
-        const externalTakeEveryNth = takeEveryNth;
         const parentTakeEveryNth = super.takeEveryNth;
         return function takeEveryNth(count: number | bigint): Itmod<R> {
             // check if mapping function uses the index.
@@ -1950,8 +2242,7 @@ export class MappedItmod<T, R> extends Itmod<R> {
                 return parentTakeEveryNth(count);
             } else {
                 return new MappedItmod(
-                    self.originalProperties,
-                    () => externalTakeEveryNth(count, self.originalGetSource()),
+                    self.original.takeEveryNth(count),
                     self.mapping
                 );
             }
@@ -1960,7 +2251,6 @@ export class MappedItmod<T, R> extends Itmod<R> {
 
     public get takeRandom() {
         const self = this;
-        const externalTakeRandom = takeRandom;
         const parentTakeRandom = super.takeRandom;
         return function takeRandom(count: number | bigint): Itmod<R> {
             // check if mapping function uses the index.
@@ -1968,8 +2258,7 @@ export class MappedItmod<T, R> extends Itmod<R> {
                 return parentTakeRandom(count);
             } else {
                 return new MappedItmod(
-                    self.originalProperties,
-                    () => externalTakeRandom(count, self.originalGetSource()),
+                    self.original.takeRandom(count),
                     self.mapping
                 );
             }
@@ -1978,7 +2267,6 @@ export class MappedItmod<T, R> extends Itmod<R> {
 
     public get skipEveryNth() {
         const self = this;
-        const externalSkipEveryNth = skipEveryNth;
         const parentSkipEveryNth = super.skipEveryNth;
         return function skipEveryNth(count: number | bigint): Itmod<R> {
             // check if mapping function uses the index.
@@ -1986,8 +2274,7 @@ export class MappedItmod<T, R> extends Itmod<R> {
                 return parentSkipEveryNth(count);
             } else {
                 return new MappedItmod(
-                    self.originalProperties,
-                    () => externalSkipEveryNth(count, self.originalGetSource()),
+                    self.original.skipEveryNth(count),
                     self.mapping
                 );
             }
@@ -1996,7 +2283,6 @@ export class MappedItmod<T, R> extends Itmod<R> {
 
     public get skipRandom() {
         const self = this;
-        const externalSkipRandom = skipRandom;
         const parentSkipRandom = super.skipRandom;
         return function skipRandom(count: number | bigint): Itmod<R> {
             // check if mapping function uses the index.
@@ -2004,8 +2290,7 @@ export class MappedItmod<T, R> extends Itmod<R> {
                 return parentSkipRandom(count);
             } else {
                 return new MappedItmod(
-                    self.originalProperties,
-                    () => externalSkipRandom(count, self.originalGetSource()),
+                    self.original.skipRandom(count),
                     self.mapping
                 );
             }
@@ -2014,226 +2299,6 @@ export class MappedItmod<T, R> extends Itmod<R> {
 }
 
 const _emptyItmod = new Itmod<any>({}, returns(emptyIterable()));
-
-function take<T>(count: number | bigint, source: Iterable<T>): Iterable<T> {
-    requireIntegerOrInfinity(requireNonNegative(count));
-    if (count === Infinity) return source;
-    if (isZero(count)) return [];
-
-    const size = nonIteratedCountOrUndefined(source);
-    if (size !== undefined) {
-        if (count >= size) return source;
-    }
-
-    return {
-        *[Symbol.iterator]() {
-            const iterator = source[Symbol.iterator]();
-            for (let i = zeroLike(count); i < count; i++) {
-                const next = iterator.next();
-                if (next.done) break;
-
-                yield next.value;
-            }
-        },
-    };
-}
-
-function skip<T>(count: number | bigint, source: Iterable<T>): Iterable<T> {
-    requireIntegerOrInfinity(requireNonNegative(count));
-    if (isZero(count)) return source;
-    if (count === Infinity) return [];
-
-    return {
-        *[Symbol.iterator]() {
-            if (isArray(source)) {
-                const numberCount = Number(count);
-                if (numberCount === Infinity) return [];
-                for (let i = numberCount; i < source.length; i++) {
-                    yield source[i] as T;
-                }
-            } else {
-                const iterator = source[Symbol.iterator]();
-                let next = iterator.next();
-
-                for (let i = zeroLike(count); i < count; i++) {
-                    if (next.done) return;
-                    next = iterator.next();
-                }
-
-                while (!next.done) {
-                    yield next.value;
-                    next = iterator.next();
-                }
-            }
-        },
-    };
-}
-
-/**
- * note: expensive and fresh
- */
-function takeFinal<T>(
-    count: number | bigint,
-    source: Iterable<T>
-): Iterable<T> {
-    requireIntegerOrInfinity(requireNonNegative(count));
-    if (count === Infinity) return source;
-    if (isZero(count)) return [];
-
-    const size = nonIteratedCountOrUndefined(source);
-    if (size !== undefined) {
-        if (count >= size) return source;
-        return skip(size - Number(count), source);
-    }
-
-    const buffer = new CircularBuffer<T>(Number(count));
-    for (const value of source) {
-        buffer.push(value);
-    }
-
-    return buffer;
-}
-
-function skipFinal<T>(
-    count: number | bigint,
-    source: Iterable<T>
-): Iterable<T> {
-    requireIntegerOrInfinity(requireNonNegative(count));
-    if (count === Infinity) return [];
-    if (isZero(count)) return source;
-
-    const size = nonIteratedCountOrUndefined(source);
-
-    if (size !== undefined) {
-        if (count >= size) return [];
-        return take(size - Number(count), source);
-    }
-
-    return {
-        *[Symbol.iterator]() {
-            const buffer = new CircularBuffer<T>(Number(count));
-
-            for (const item of source) {
-                if (buffer.isFull) yield buffer.at(0)!;
-                buffer.push(item);
-            }
-        },
-    };
-}
-
-function takeEveryNth<T>(n: number | bigint, source: Iterable<T>): Iterable<T> {
-    requireIntegerOrInfinity(requireGreaterThanZero(n));
-    if (n === Infinity) return emptyIterable();
-    if (isOne(n)) return source;
-
-    return {
-        *[Symbol.iterator]() {
-            let i = zeroLike(n);
-            for (const item of source) {
-                i++;
-                if (i >= n) {
-                    yield item;
-                    i = zeroLike(n);
-                }
-            }
-        },
-    };
-}
-
-function takeWhile<T>(
-    condition: (item: T, index: number) => boolean,
-    source: Iterable<T>
-) {
-    return {
-        *[Symbol.iterator]() {
-            let i = 0;
-            for (const item of source) {
-                if (!condition(item, i)) break;
-                yield item;
-                i++;
-            }
-        },
-    };
-}
-
-function takeRandom<T>(
-    count: number | bigint,
-    source: Iterable<T>,
-    getRandomInt?: (upperBound: number) => number
-): Iterable<T> {
-    requireIntegerOrInfinity(requireNonNegative(count));
-    if (isZero(count)) return emptyIterable();
-
-    const shuffled = [...source];
-    fisherYatesShuffle(shuffled, getRandomInt);
-
-    return take(count, shuffled);
-}
-
-function skipEveryNth<T>(n: number | bigint, source: Iterable<T>): Iterable<T> {
-    requireIntegerOrInfinity(requireGreaterThanZero(n));
-    if (n === Infinity) return source;
-    if (isOne(n)) return emptyIterable();
-
-    return {
-        *[Symbol.iterator]() {
-            let i = zeroLike(n);
-            for (const item of source) {
-                i++;
-                if (i >= n) {
-                    i = zeroLike(n);
-                } else {
-                    yield item;
-                }
-            }
-        },
-    };
-}
-
-function skipWhile<T>(
-    source: Iterable<T>,
-    condition: (item: T, index: number) => boolean
-) {
-    return {
-        *[Symbol.iterator]() {
-            const iterator = source[Symbol.iterator]();
-
-            let next = iterator.next();
-            let i = 0;
-            while (!next.done) {
-                if (!condition(next.value, i)) break;
-                next = iterator.next();
-                i++;
-            }
-
-            while (!next.done) {
-                yield next.value;
-                next = iterator.next();
-            }
-        },
-    };
-}
-
-function skipRandom<T>(
-    count: number | bigint,
-    source: Iterable<T>,
-    getRandomInt?: (upperBound: number) => number
-): Iterable<T> {
-    requireIntegerOrInfinity(requireNonNegative(count));
-    if (count === Infinity) return emptyIterable();
-    if (isZero(count)) return source;
-
-    const nonIteratedCount = nonIteratedCountOrUndefined(source);
-    if (nonIteratedCount !== undefined && count >= nonIteratedCount) {
-        return emptyIterable();
-    }
-
-    const shuffled = [...source];
-    if (count >= shuffled.length) return emptyIterable();
-    fisherYatesShuffle(shuffled, getRandomInt);
-
-    return take(shuffled.length - Number(count), shuffled);
-}
 
 /**
  * @returns 0n if the input is a bigint; 0 if the input is a number;
@@ -2286,7 +2351,7 @@ function toMap<T>(
 /**
  * Shuffles the given array in place.
  * @param array What to shuffle.
- * @param getRandomInt Returns a random integer that's greater than or equal to 0 and less than upperBound. Defaults to using {@link Math.random}, which is not cryptographically secure.
+ * @param getRandomInt Returns a random integer that's greater than or equal to 0 and less than the upperBound. Defaults to using {@link Math.random}, which is not cryptographically secure.
  */
 export function fisherYatesShuffle(
     array: any[],
@@ -2339,32 +2404,15 @@ function makeString(
             return start + collection + end;
         }
     }
-    // TODO test performance difference
-    // return start + [...collection].join(separator) + end;
 
-    const builder: unknown[] = [start];
-
-    const iterator = collection[Symbol.iterator]();
-    let next = iterator.next();
-
-    if (!next.done) {
-        builder.push(next.value);
-
-        while (!(next = iterator.next()).done) {
-            builder.push(separator);
-            builder.push(next.value);
-        }
-    }
-
-    builder.push(end);
-    return builder.join("");
+    return start + [...collection].join(separator) + end;
 }
 
 /**
  * Splits the collection on the deliminator.
  * Equivalent to {@link String.split} except that regular expressions aren't supported.
  */
-export function split<T, O>(
+function split<T, O>(
     collection: Iterable<T>,
     deliminator: Iterable<O>,
     equalityChecker: (t: T, o: O) => boolean = Object.is
@@ -2396,6 +2444,155 @@ export function split<T, O>(
             }
 
             yield chunk;
+        },
+    };
+}
+
+function indexBy<T, K>(
+    items: Iterable<T>,
+    keySelector: (item: T, index: number) => K
+): Map<K, T> {
+    const indexedItems = new Map<K, T>();
+
+    let i = 0;
+    for (const item of items) {
+        const key = keySelector(item, i);
+        indexedItems.set(key, item);
+    }
+
+    return indexedItems;
+}
+
+function groupBy<T, K>(
+    items: Iterable<T>,
+    keySelector: (item: T, index: number) => K,
+    groupSelector?: (group: T[], key: K) => any
+): Map<K, any> {
+    const groups = new Map<K, any>();
+
+    let i = 0;
+    for (const item of items) {
+        const key = keySelector(item, i);
+        const group = groups.get(key);
+        if (group === undefined) {
+            groups.set(key, [item]);
+        } else {
+            group.push(item);
+        }
+        i++;
+    }
+
+    if (groupSelector !== undefined) {
+        for (const [key, group] of groups) {
+            groups.set(key, groupSelector(group, key));
+        }
+    }
+
+    return groups;
+}
+
+function groupJoinByKey<O, I, K, R>(
+    left: Iterable<O>,
+    right: Iterable<I>,
+    outerKeySelector: (item: O) => K,
+    innerKeySelector: (item: I) => K,
+    resultSelector: (outer: O, innerGroup: I[]) => R,
+    inner: boolean
+): Iterable<R> {
+    return {
+        *[Symbol.iterator]() {
+            const innerGrouped = groupBy(right, innerKeySelector);
+
+            for (const o of left) {
+                const key = outerKeySelector(o);
+                const innerGroup = innerGrouped.get(key);
+                if (innerGroup !== undefined || !inner) {
+                    const result = resultSelector(o, innerGroup ?? []);
+                    yield result;
+                }
+            }
+        },
+    };
+}
+
+function groupJoinByComparison<O, I, R>(
+    left: Iterable<O>,
+    right: Iterable<I>,
+    is: (outer: O, inner: I) => boolean,
+    resultSelector: (outer: O, innerGroup: I[]) => R,
+    inner: boolean
+): Iterable<R> {
+    return {
+        *[Symbol.iterator]() {
+            const innerCached = [...right];
+
+            for (const o of left) {
+                const innerGroup: I[] = [];
+                for (const inner of innerCached) {
+                    if (is(o, inner)) {
+                        innerGroup.push(inner);
+                    }
+                }
+
+                if (innerGroup.length > 0 || !inner) {
+                    const result = resultSelector(o, innerGroup);
+                    yield result;
+                }
+            }
+        },
+    };
+}
+
+function joinByKey<A, B, K, R>(
+    left: Iterable<A>,
+    right: Iterable<B>,
+    leftKeySelector: (item: A) => K,
+    rightKeySelector: (item: B) => K,
+    resultSelector: (left: A, right: B | undefined) => R,
+    inner: boolean
+): Iterable<R> {
+    return {
+        *[Symbol.iterator]() {
+            const rightIndexed = indexBy(right, rightKeySelector);
+            for (const item of left) {
+                const key = leftKeySelector(item);
+                if (!inner || rightIndexed.has(key)) {
+                    const rightItem = rightIndexed.get(key);
+                    const result = resultSelector(item, rightItem);
+                    yield result;
+                }
+            }
+        },
+    };
+}
+
+function joinByComparison<A, B, R>(
+    left: Iterable<A>,
+    right: Iterable<B>,
+    is: (left: A, right: B) => boolean,
+    resultSelector: (left: A, right: B | undefined) => R,
+    inner: boolean
+) {
+    return {
+        *[Symbol.iterator]() {
+            const rightCached = [...right];
+            for (const item of left) {
+                let matchingRightItem: B | undefined = undefined;
+                let itemFound = false;
+
+                for (const rightItem of rightCached) {
+                    if (is(item, rightItem)) {
+                        matchingRightItem = rightItem;
+                        itemFound = true;
+                        break;
+                    }
+                }
+
+                if (itemFound || !inner) {
+                    const result = resultSelector(item, matchingRightItem);
+                    yield result;
+                }
+            }
         },
     };
 }

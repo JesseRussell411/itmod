@@ -64,6 +64,20 @@ export default class LinkedList<T> extends Collection<T> {
         }
     }
 
+    public nodes(): Iterable<LinkedListNode<T>> {
+        const self = this;
+        return {
+            *[Symbol.iterator]() {
+                let current = self.head;
+                while (current !== undefined) {
+                    const next = current.next;
+                    yield current;
+                    current = next;
+                }
+            },
+        };
+    }
+
     /**
      * Finds the node at the given index in O(index) time.
      * @param index The index of the node to get. Negative indexes refer to the {@link tail} node and count backwards: -1 refers to the final element, -2 refers to the second to final element, etc.
