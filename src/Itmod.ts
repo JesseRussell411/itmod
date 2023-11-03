@@ -2894,8 +2894,6 @@ function groupByRecursive<
         keySelector,
         rest.length === 0
             ? groupSelector
-            : (group) => {
-                  groupByRecursive(group, rest, groupSelector);
-              }
+            : (group) => groupByRecursive(group, rest, groupSelector)
     );
 }
