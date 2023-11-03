@@ -40,6 +40,7 @@ import {
     reverseOrder,
 } from "./sorting";
 import MapEntryLike from "./types/MapEntryLike";
+import { ReturnTypes } from "./types/functions";
 import { IterableType as IterableType } from "./types/iterable";
 
 // TODO unit tests
@@ -955,19 +956,23 @@ export default class Itmod<T> implements Iterable<T> {
     public get takeEveryNth() {
         const self = this;
         return function takeEveryNth(n: number | bigint): Itmod<T> {
-            return new Itmod<T>({}, function* () {
+            return new Itmod<T>({}, () => {
                 const source = self.getSource();
                 if (n === Infinity) return emptyIterable();
                 if (isOne(n)) return source;
 
-                let i = zeroLike(n);
-                for (const item of source) {
-                    i++;
-                    if (i >= n) {
-                        yield item;
-                        i = zeroLike(n);
-                    }
-                }
+                return {
+                    *[Symbol.iterator]() {
+                        let i = zeroLike(n);
+                        for (const item of source) {
+                            i++;
+                            if (i >= n) {
+                                yield item;
+                                i = zeroLike(n);
+                            }
+                        }
+                    },
+                };
             });
         };
     }
@@ -1010,16 +1015,16 @@ export default class Itmod<T> implements Iterable<T> {
             );
         };
     }
-
-    public get takeRandom() {
-        const self = this;
-        return function takeRandom(
-            count: number | bigint,
-            getRandomInt?: (upperBound: number) => number
-        ) {
-            return self.shuffle(getRandomInt).take(count);
-        };
-    }
+    // TODO rewrite to maintain original order
+    // public get takeRandom() {
+    //     const self = this;
+    //     return function takeRandom(
+    //         count: number | bigint,
+    //         getRandomInt?: (upperBound: number) => number
+    //     ) {
+    //         return self.shuffle(getRandomInt).take(count);
+    //     };
+    // }
 
     /**
      * Skips the first given number of items, keeping the rest.
@@ -1028,7 +1033,7 @@ export default class Itmod<T> implements Iterable<T> {
         const self = this;
         return function skip(count: number | bigint): Itmod<T> {
             requireIntegerOrInfinity(requireNonNegative(count));
-            return new Itmod({}, function* () {
+            return new Itmod({}, () => {
                 const source = self.getSource();
 
                 if (isZero(count)) return source;
@@ -1038,24 +1043,33 @@ export default class Itmod<T> implements Iterable<T> {
                 if (size !== undefined && count >= size) return emptyIterable();
 
                 if (isArray(source)) {
-                    const numberCount = Number(count);
-                    if (numberCount === Infinity) return emptyIterable();
-                    for (let i = numberCount; i < source.length; i++) {
-                        yield source[i] as T;
-                    }
+                    return {
+                        *[Symbol.iterator]() {
+                            const numberCount = Number(count);
+                            if (numberCount === Infinity)
+                                return emptyIterable();
+                            for (let i = numberCount; i < source.length; i++) {
+                                yield source[i] as T;
+                            }
+                        },
+                    };
                 } else {
-                    const iterator = source[Symbol.iterator]();
-                    let next = iterator.next();
+                    return {
+                        *[Symbol.iterator]() {
+                            const iterator = source[Symbol.iterator]();
+                            let next = iterator.next();
 
-                    for (let i = zeroLike(count); i < count; i++) {
-                        if (next.done) return;
-                        next = iterator.next();
-                    }
+                            for (let i = zeroLike(count); i < count; i++) {
+                                if (next.done) return;
+                                next = iterator.next();
+                            }
 
-                    while (!next.done) {
-                        yield next.value;
-                        next = iterator.next();
-                    }
+                            while (!next.done) {
+                                yield next.value;
+                                next = iterator.next();
+                            }
+                        },
+                    };
                 }
             });
         };
@@ -1068,18 +1082,22 @@ export default class Itmod<T> implements Iterable<T> {
         const self = this;
         return function skipFinal(count: number | bigint): Itmod<T> {
             requireIntegerOrInfinity(requireNonNegative(count));
-            return new Itmod({}, function* () {
+            return new Itmod({}, () => {
                 const source = self.getSource();
                 if (count === Infinity) return emptyIterable();
                 if (isZero(count)) return source;
-                // TODO break out take for an optimization here
+                return {
+                    *[Symbol.iterator]() {
+                        // TODO break out take for an optimization here
 
-                const buffer = new CircularBuffer<T>(Number(count));
+                        const buffer = new CircularBuffer<T>(Number(count));
 
-                for (const item of source) {
-                    if (buffer.isFull) yield buffer.at(0) as T;
-                    buffer.push(item);
-                }
+                        for (const item of source) {
+                            if (buffer.isFull) yield buffer.at(0) as T;
+                            buffer.push(item);
+                        }
+                    },
+                };
             });
         };
     }
@@ -1087,19 +1105,26 @@ export default class Itmod<T> implements Iterable<T> {
     public get skipEveryNth() {
         const self = this;
         return function skipEveryNth(n: number | bigint): Itmod<T> {
-            return new Itmod<T>({}, function* () {
+            return new Itmod<T>({}, () => {
                 const source = self.getSource();
-                if (n === Infinity) return emptyIterable();
-                if (isOne(n)) return source;
-
-                let i = zeroLike(n);
-                for (const item of source) {
-                    i++;
-                    if (i >= n) {
-                        yield item;
-                        i = zeroLike(n);
-                    }
+                if (n === Infinity) {
+                    return source;
                 }
+                if (isOne(n)) return emptyIterable();
+
+                return {
+                    *[Symbol.iterator]() {
+                        let i = zeroLike(n);
+                        for (const item of source) {
+                            i++;
+                            if (i >= n) {
+                                i = zeroLike(n);
+                            } else {
+                                yield item;
+                            }
+                        }
+                    },
+                };
             });
         };
     }
@@ -1129,15 +1154,16 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
-    public get skipRandom() {
-        const self = this;
-        return function skipRandom(
-            count: number | bigint,
-            getRandomInt?: (upperBound: number) => number
-        ) {
-            return self.shuffle(getRandomInt).skip(count);
-        };
-    }
+    // TODO rewrite to maintain original order
+    // public get skipRandom() {
+    //     const self = this;
+    //     return function skipRandom(
+    //         count: number | bigint,
+    //         getRandomInt?: (upperBound: number) => number
+    //     ) {
+    //         return self.shuffle(getRandomInt).skip(count);
+    //     };
+    // }
 
     /**
      * Equivalent to {@link Array.copyWithin}.
@@ -1364,11 +1390,18 @@ export default class Itmod<T> implements Iterable<T> {
     public get groupBy() {
         const self = this;
         return function groupBy<
-            KeySelectors extends readonly ((item: T) => unknown)[]
+            KeySelector extends (item: T) => unknown,
+            AdditionalKeySelectors extends readonly ((item: T) => unknown)[]
         >(
-            ...keySelectors: KeySelectors
-        ): GroupedItmod<ReturnTypes<KeySelectors>, T, T[]> {
-            return new GroupedItmod(self, keySelectors, identity);
+            keySelector: KeySelector,
+            ...additionalKeySelectors: AdditionalKeySelectors
+        ): GroupedItmod<KeySelector, AdditionalKeySelectors, T, T[]> {
+            return new GroupedItmod(
+                self,
+                keySelector,
+                additionalKeySelectors,
+                identity
+            );
         };
     }
 
@@ -2321,26 +2354,26 @@ export class MappedItmod<T, R> extends Itmod<R> {
         };
     }
 
-    private get parentTakeRandom() {
-        return super.takeRandom;
-    }
-    public get takeRandom() {
-        const self = this;
-        return function takeRandom(count: number | bigint): Itmod<R> {
-            // check if mapping function uses the index.
-            if (self.mapping.length >= 2) {
-                return self.original
-                    .indexed()
-                    .parentTakeRandom(count)
-                    .map(([index, item]) => self.mapping(item, index));
-            } else {
-                return new MappedItmod(
-                    self.original.takeRandom(count),
-                    self.mapping
-                );
-            }
-        };
-    }
+    // private get parentTakeRandom() {
+    //     return super.takeRandom;
+    // }
+    // public get takeRandom() {
+    //     const self = this;
+    //     return function takeRandom(count: number | bigint): Itmod<R> {
+    //         // check if mapping function uses the index.
+    //         if (self.mapping.length >= 2) {
+    //             return self.original
+    //                 .indexed()
+    //                 .parentTakeRandom(count)
+    //                 .map(([index, item]) => self.mapping(item, index));
+    //         } else {
+    //             return new MappedItmod(
+    //                 self.original.takeRandom(count),
+    //                 self.mapping
+    //             );
+    //         }
+    //     };
+    // }
 
     private get parentSkipEveryNth() {
         return super.skipEveryNth;
@@ -2363,26 +2396,26 @@ export class MappedItmod<T, R> extends Itmod<R> {
         };
     }
 
-    private get parentSkipRandom() {
-        return super.skipRandom;
-    }
-    public get skipRandom() {
-        const self = this;
-        return function skipRandom(count: number | bigint): Itmod<R> {
-            // check if mapping function uses the index.
-            if (self.mapping.length >= 2) {
-                return self.original
-                    .indexed()
-                    .parentSkipRandom(count)
-                    .map(([index, item]) => self.mapping(item, index));
-            } else {
-                return new MappedItmod(
-                    self.original.skipRandom(count),
-                    self.mapping
-                );
-            }
-        };
-    }
+    // private get parentSkipRandom() {
+    //     return super.skipRandom;
+    // }
+    // public get skipRandom() {
+    //     const self = this;
+    //     return function skipRandom(count: number | bigint): Itmod<R> {
+    //         // check if mapping function uses the index.
+    //         if (self.mapping.length >= 2) {
+    //             return self.original
+    //                 .indexed()
+    //                 .parentSkipRandom(count)
+    //                 .map(([index, item]) => self.mapping(item, index));
+    //         } else {
+    //             return new MappedItmod(
+    //                 self.original.skipRandom(count),
+    //                 self.mapping
+    //             );
+    //         }
+    //     };
+    // }
 
     // These overloads only exists to preserve certain optimizations for special sources like arrays
 
@@ -2455,18 +2488,27 @@ export class ReversedItmod<T> extends Itmod<T> {
     }
 }
 
-export class GroupedItmod<Keys extends any[], T, Group> extends Itmod<
-    GroupByRecursiveResult<Keys, Group> extends Iterable<infer SubT> ? SubT : T
+export class GroupedItmod<
+    KeySelector extends (item: T) => unknown,
+    AdditionalKeySelectors extends readonly ((item: T) => unknown)[],
+    T,
+    Group
+> extends Itmod<
+    GroupByRecursiveResult<
+        ReturnTypes<[KeySelector, ...AdditionalKeySelectors]>,
+        Group
+    > extends Iterable<infer SubT>
+        ? SubT
+        : never
 > {
-    private readonly keySelectors: readonly ((item: T) => unknown)[];
+    private readonly keySelector: KeySelector;
+    private readonly additionalKeySelectors: AdditionalKeySelectors;
     private readonly original: Itmod<T>;
     private readonly groupMapping: (items: T[]) => Group;
-    public test(): [...Keys]{
-        return null as any
-    }
     public constructor(
         original: Itmod<T>,
-        keySelectors: readonly ((item: T) => unknown)[],
+        keySelector: KeySelector,
+        additionalKeySelectors: AdditionalKeySelectors,
         groupMapping: (items: T[]) => Group
     ) {
         super(
@@ -2477,12 +2519,13 @@ export class GroupedItmod<Keys extends any[], T, Group> extends Itmod<
             () => {
                 return groupByRecursive(
                     original.getSource(),
-                    keySelectors,
+                    [keySelector, ...additionalKeySelectors],
                     groupMapping
                 ) as any;
             }
         );
-        this.keySelectors = keySelectors;
+        this.keySelector = keySelector;
+        this.additionalKeySelectors = additionalKeySelectors;
         this.original = original;
         this.groupMapping = groupMapping;
     }
@@ -2490,8 +2533,11 @@ export class GroupedItmod<Keys extends any[], T, Group> extends Itmod<
     public get mapGroups() {
         const self = this;
         return function mapGroup<G>(mapping: (group: Group) => G) {
-            return new GroupedItmod(self.original, self.keySelectors, (group) =>
-                mapping(self.groupMapping(group))
+            return new GroupedItmod(
+                self.original,
+                self.keySelector,
+                self.additionalKeySelectors,
+                (group) => mapping(self.groupMapping(group))
             );
         };
     }
@@ -2797,13 +2843,20 @@ function joinByComparison<A, B, R>(
     };
 }
 
+// export type GroupByRecursiveResult<
+//     Keys extends readonly any[],
+//     Group
+// > = Keys extends readonly [infer Key, ...infer Rest]
+//     ? Rest["length"] extends 0
+//         ? Map<Key, Group>
+//         : Map<Key, GroupByRecursiveResult<Rest, Group>>
+//     : Group;
+
 export type GroupByRecursiveResult<
     Keys extends readonly any[],
     Group
-> = Keys extends [...infer Head, infer Key]
-    ? Head["length"] extends 0
-        ? Map<Key, Group>
-        : GroupByRecursiveResult<Head, Map<Key, Group>>
+> = Keys extends readonly [infer Key, ...infer Rest]
+    ? Map<Key, GroupByRecursiveResult<Rest, Group>>
     : Group;
 
 function groupByRecursive<
