@@ -1,4 +1,4 @@
-import { Order, autoComparator } from "../sorting";
+import { Order, asComparator, autoComparator } from "../sorting";
 import Collection from "./Collection";
 import LinkedList from "./LinkedList";
 import SortedMap from "./SortedMap";
@@ -7,7 +7,7 @@ import SortedMap from "./SortedMap";
  * A sequence of items, optionally with a max size, that maintains sorted order with insertion order as a fallback for duplicate values.
  */
 export default class SortedSequence<T> extends Collection<T> {
-    private readonly data: SortedMap<T, LinkedList<T>>;
+    private readonly data: SortedMap<LinkedList<T>, undefined>;
     public readonly sizeLimit?: Readonly<{
         maxSize: number;
         keep: "greatest" | "least";
@@ -20,6 +20,10 @@ export default class SortedSequence<T> extends Collection<T> {
 
     private set size(value: number) {
         this._size = value;
+    }
+
+    public final() {
+        return this.data.getLargestEntry()?.key.final();
     }
 
     /**
@@ -36,7 +40,8 @@ export default class SortedSequence<T> extends Collection<T> {
     ) {
         super();
         if (sizeLimit !== undefined) this.sizeLimit = { ...sizeLimit };
-        this.data = new SortedMap(order);
+        const comparator = asComparator(order);
+        this.data = new SortedMap((a, b) => comparator(a.first()!, b.first()!));
     }
 
     /** Add a value to the sequence. */
@@ -47,8 +52,11 @@ export default class SortedSequence<T> extends Collection<T> {
         const oversize =
             this.sizeLimit !== undefined && this.size >= this.sizeLimit.maxSize;
 
-        const list = this.data.getOrCompute(value, () => new LinkedList<T>());
-        list.push(value);
+        const key = LinkedList.of(value);
+        const list = this.data.getEntryOrCompute(key, () => undefined).key;
+        if (list !== key) {
+            list.push(value);
+        }
 
         this.size++;
 
@@ -68,15 +76,8 @@ export default class SortedSequence<T> extends Collection<T> {
         if (this.isEmpty) return false;
 
         this.data.deleteLargest((entry) => {
-            entry.value.pop();
-            if (entry.value.isEmpty) {
-                return true;
-            } else {
-                // Replace key with one that is definitely in the linked list so that the current key can be garbage collected.
-                // Because, if the current key is not in the linked list, the sorted map might be the only thing holding it.
-                this.data.reKey(entry, entry.value.head!.value);
-                return false;
-            }
+            entry.key.pop();
+            return entry.key.isEmpty;
         });
 
         this.size--;
@@ -90,15 +91,8 @@ export default class SortedSequence<T> extends Collection<T> {
         if (this.isEmpty) return false;
 
         this.data.deleteSmallest((entry) => {
-            entry.value.shift();
-            if (entry.value.isEmpty) {
-                return true;
-            } else {
-                // Replace key with one that is definitely in the linked list so that the current key can be garbage collected.
-                // Because, if the current key is not in the linked list, the sorted map might be the only thing holding it.
-                this.data.reKey(entry, entry.value.head!.value);
-                return false;
-            }
+            entry.key.shift();
+            return entry.key.isEmpty;
         });
 
         this.size--;
@@ -108,13 +102,13 @@ export default class SortedSequence<T> extends Collection<T> {
     /** @returns The largest value in the sequence. */
     public getLargest(): T | undefined {
         if (this.isEmpty) return undefined;
-        return this.data.getLargestEntry()?.value.tail?.value;
+        return this.data.getLargestEntry()?.key.tail?.value;
     }
 
     /** @returns The smallest value in the sequence. */
     public getSmallest(): T | undefined {
         if (this.isEmpty) return undefined;
-        return this.data.getSmallestEntry()?.value.head?.value;
+        return this.data.getSmallestEntry()?.key.head?.value;
     }
 
     /**
@@ -128,7 +122,18 @@ export default class SortedSequence<T> extends Collection<T> {
 
     public *[Symbol.iterator]() {
         for (const entry of this.data) {
-            yield* entry[1];
+            yield* entry.key;
         }
+    }
+
+    public reversed(): Iterable<T> {
+        const self = this;
+        return {
+            *[Symbol.iterator]() {
+                for (const [list] of self.data.reversed()) {
+                    yield* list.reversed();
+                }
+            },
+        };
     }
 }

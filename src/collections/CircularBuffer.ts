@@ -131,6 +131,10 @@ export default class CircularBuffer<T> extends Collection<T> {
         };
     }
 
+    public final() {
+        return this.at(-1);
+    }
+
     /** In-place reverses the buffer's elements. */
     public reverse() {
         let end = Math.trunc(this.size / 2);
@@ -181,7 +185,10 @@ export default class CircularBuffer<T> extends Collection<T> {
                 // [567
                 ...this.data.slice(0, maxEndLength),
             ] as T[];
-            // design note: much faster than iteration ([...buffer]) but I wish javascript had a memcopy-like function for copying items from a section of one array to a section of another.
+            // design note: much faster than iteration ([...buffer])
+            // but I wish javascript had a memcopy-like function for
+            // copying items from a section of one array to a section of another.
+            //
             // This requires the slice function to create a "middleman" array that isn't really necessary.
         } else {
             // data: [---01234567---]

@@ -202,6 +202,10 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
         };
     }
 
+    public final() {
+        return this.getLargestNode();
+    }
+
     private *_iterator(node: Node<K, V> | undefined): Generator<Node<K, V>> {
         if (node === undefined) return;
         yield* this._iterator(node.left);
@@ -317,7 +321,7 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
      *
      * @returns Whether the key was replaced.
      */
-    public reKey(entry: SortedMapEntry<K, V>, newKey: K): boolean {
+    private reKey(entry: SortedMapEntry<K, V>, newKey: K): boolean {
         const node = entry as Node<K, V>;
 
         // does the entry belong to this map?
@@ -335,7 +339,7 @@ export default class SortedMap<K, V> extends Collection<SortedMapEntry<K, V>> {
      *
      * @returns Whether the value was replaced.
      */
-    public reValue(entry: SortedMapEntry<K, V>, newValue: V): boolean {
+    private reValue(entry: SortedMapEntry<K, V>, newValue: V): boolean {
         const node = entry as Node<K, V>;
 
         // does the entry belong to this map?

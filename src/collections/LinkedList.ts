@@ -37,6 +37,10 @@ export default class LinkedList<T> extends Collection<T> {
         }
     }
 
+    public static of<T>(...values: T[]): LinkedList<T> {
+        return new LinkedList(values);
+    }
+
     /** The node at index 0. The first node. */
     public get head(): LinkedListNode<T> | undefined {
         return this._head;
@@ -175,6 +179,10 @@ export default class LinkedList<T> extends Collection<T> {
         }
     }
 
+    public final() {
+        return this.tail?.value;
+    }
+
     /**
      * Inserts the value in front of the {@link tail} node, making it the new {@link tail} node.
      *
@@ -218,11 +226,11 @@ export default class LinkedList<T> extends Collection<T> {
     }
 
     /**
-     * Removes the {@link tail} node and returns its value.
+     * Removes the {@link tail} node and returns it.
      *
-     * @returns The former {@link tail}'s value or undefined if the {@link LinkedList} is empty.
+     * @returns The former {@link tail} or undefined if the {@link LinkedList} is empty.
      */
-    public pop(): T | undefined {
+    public popNode(): LinkedListNode<T> | undefined {
         if (this.isEmpty) return undefined;
 
         const node = this._tail!;
@@ -240,15 +248,24 @@ export default class LinkedList<T> extends Collection<T> {
 
         this.size--;
 
-        return node.value;
+        return node;
     }
 
     /**
-     * Removes the {@link head} node and returns its value.
+     * Removes the {@link tail} node and returns its value.
      *
-     * @returns The former {@link head}'s value or undefined if the {@link LinkedList} is empty.
+     * @returns The former {@link tail}'s value or undefined if the {@link LinkedList} is empty.
      */
-    public shift(): T | undefined {
+    public pop(): T | undefined {
+        return this.popNode()?.value;
+    }
+
+    /**
+     * Removes the {@link head} node and returns it.
+     *
+     * @returns The former {@link head} or undefined if the {@link LinkedList} is empty.
+     */
+    public shiftNode(): LinkedListNode<T> | undefined {
         if (this.isEmpty) return undefined;
 
         const node = this._head!;
@@ -266,7 +283,16 @@ export default class LinkedList<T> extends Collection<T> {
 
         this.size--;
 
-        return node.value;
+        return node;
+    }
+
+    /**
+     * Removes the {@link head} node and returns its value.
+     *
+     * @returns The former {@link head}'s value or undefined if the {@link LinkedList} is empty.
+     */
+    public shift(): T | undefined {
+        return this.shiftNode()?.value;
     }
 
     /**

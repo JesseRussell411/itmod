@@ -1,5 +1,5 @@
 import { isIterable } from "./is";
-import { emptyIterator } from "./iterables";
+import { emptyIterator, wrapIterator } from "./iterables";
 import { toArray, toSet } from "./to";
 
 /**
@@ -35,14 +35,7 @@ export function asIterable<T>(value: Iterator<T> | Iterable<T>): Iterable<T> {
     if (isIterable(value)) {
         return value;
     } else {
-        let iterator = value;
-        return {
-            [Symbol.iterator]() {
-                const result = iterator;
-                iterator = emptyIterator();
-                return result;
-            },
-        };
+        return wrapIterator(value);
     }
 }
 

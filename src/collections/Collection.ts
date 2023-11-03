@@ -50,6 +50,22 @@ export default abstract class Collection<T> implements Iterable<T> {
     }
 
     /**
+     * @returns The first element in the collection given by its iterator.
+     */
+    public first(): T | undefined {
+        for (const item of this) return item;
+    }
+
+    /**
+     * @returns The final element in the collection given by its iterator.
+     */
+    public final(): T | undefined {
+        let final: T | undefined = undefined;
+        for (const item of this) final = item;
+        return final;
+    }
+
+    /**
      * Convert the signed index to an unsigned index.
      */
     protected static loopSignedIndex(bounds: number, index: number): number {

@@ -168,8 +168,9 @@ export function cachingIterable<T>(
                 } else {
                     const next = iterator.next();
                     if (next.done) return;
-                    cache.push(next.value);
-                    yield next.value;
+                    const value = next.value;
+                    cache.push(value);
+                    yield value;
                 }
                 i++;
             }
@@ -200,4 +201,14 @@ export function nonIteratedCountOrUndefined(
     }
 
     return undefined;
+}
+
+export function wrapIterator<T>(iterator: Iterator<T>): Iterable<T> {
+    return {
+        [Symbol.iterator]() {
+            const result = iterator;
+            iterator = emptyIterator();
+            return result;
+        },
+    };
 }
