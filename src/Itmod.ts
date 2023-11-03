@@ -1187,6 +1187,7 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /** Alias for `.map((item, i) => [i, item])` */
     public get indexed() {
         const self = this;
         return function indexed(): MappedItmod<T, [index: number, item: T]> {
@@ -2417,28 +2418,36 @@ export class MappedItmod<T, R> extends Itmod<R> {
     //     };
     // }
 
-    // These overloads only exists to preserve certain optimizations for special sources like arrays
-
+    private get parentReverse() {
+        return super.reverse;
+    }
     public get reverse() {
         const self = this;
-        const parentReverse = super.reverse;
         return function reverse(): Itmod<R> {
             // check if mapping function uses the index.
             if (self.mapping.length >= 2) {
-                return parentReverse();
+                return self.original
+                    .indexed()
+                    .parentReverse()
+                    .map(([index, item]) => self.mapping(item, index));
             } else {
                 return new MappedItmod(self.original.reverse(), self.mapping);
             }
         };
     }
 
+    private get parentShuffle() {
+        return super.shuffle;
+    }
     public get shuffle() {
         const self = this;
-        const parentShuffle = super.shuffle;
         return function shuffle(): Itmod<R> {
             // check if mapping function uses the index.
             if (self.mapping.length >= 2) {
-                return parentShuffle();
+                return self.original
+                    .indexed()
+                    .parentShuffle()
+                    .map(([index, item]) => self.mapping(item, index));
             } else {
                 return new MappedItmod(self.original.shuffle(), self.mapping);
             }
@@ -2449,17 +2458,21 @@ export class MappedItmod<T, R> extends Itmod<R> {
 export class ReversedItmod<T> extends Itmod<T> {
     protected readonly original: Itmod<T>;
     public constructor(original: Itmod<T>) {
-        super({}, function* () {
+        super({}, () => {
             const source = original.getSource();
 
             if (source instanceof Collection) {
-                yield* source.reversed();
+                return source.reversed();
             }
 
-            const array = asArray(source);
-            for (let i = array.length - 1; i >= 0; i--) {
-                yield array[i] as T;
-            }
+            return {
+                *[Symbol.iterator]() {
+                    const array = asArray(source);
+                    for (let i = array.length - 1; i >= 0; i--) {
+                        yield array[i] as T;
+                    }
+                },
+            };
         });
         this.original = original;
     }
