@@ -12,6 +12,16 @@ export default class CircularBuffer<T> extends Collection<T> {
     /** How many items are stored in the buffer. */
     private _size: number;
 
+    public resize(maxSize: number) {
+        requireNonNegative(requireSafeInteger(maxSize));
+
+        const newData = this.toArray(maxSize);
+
+        this.data = newData;
+        this.offset = 0;
+        this.size = Math.min(this.size, maxSize);
+    }
+
     /** How many items are stored in the buffer. */
     public get size() {
         return this._size;
@@ -73,6 +83,8 @@ export default class CircularBuffer<T> extends Collection<T> {
     }
 
     public *[Symbol.iterator](): Iterator<T> {
+        // TODO see if hand-written iteration is faster than a generator function
+        // I hope it isn't
         if (this.isSplit()) {
             // data: [567-----01234]
             //               |-----| <-- iterate this section first
@@ -151,10 +163,12 @@ export default class CircularBuffer<T> extends Collection<T> {
 
     /**
      * Copies the contents of the buffer into an {@link Array}.
-     * @param maxLength Maximum length of the returned array. Truncates values that don't fit from the end of the buffer.
+     * @param length Length of the new Array (defaults to the buffer's size). Values that don't fit into the new array are truncated from the end of the buffer.
      * @returns The {@link Array}.
      */
-    public toArray(maxLength: number = Infinity): T[] {
+    public toArray(length: number = this.size): T[] {
+        requireSafeInteger(requireNonNegative(length));
+
         if (this.isSplit()) {
             // The elements are split across the end of the data array
 
@@ -163,46 +177,88 @@ export default class CircularBuffer<T> extends Collection<T> {
             //         ^
             //          \__end section
 
+            /**
+             * Copies data from one array to another.
+             *
+             * *Note* that there are no constraints on the inputs as this function is expected to be used
+             * in CircularBuffer's toArray function only, where it will only receive sensical arguments.
+             */
+            function arrayCopy<T>(
+                src: T[],
+                dst: T[],
+                srcStart: number,
+                dstStart: number,
+                length: number
+            ) {
+                // SOMEHOW this is faster than using any build in library functions
+                for (let i = 0; i < length; i++) {
+                    dst[dstStart++] = src[srcStart++]!;
+                }
+
+                // I think the interpreter knows what I'm trying to do
+                // and just uses memcpy instead.
+                // I hope.
+                //
+                // In the end, this makes the toArray function about as fast
+                // as copying an actual array, as in: [...array].
+                //
+                // a little slower -- 1100ms vs 1400ms
+            }
+
+            const result = new Array(length);
+
             /** The number of items to take from the beginning section. */
-            const maxBeginningLength = Math.min(
-                this.beginningLength,
-                maxLength
-            );
+            const maxBeginningLength = Math.min(this.beginningLength, length);
 
             /** The number of items to take from the end section. */
             const maxEndLength = Math.min(
                 this.endLength,
-                maxLength - maxBeginningLength
+                length - maxBeginningLength
             );
 
             // beginning is at the end of the array
-            return [
-                // 01234]
-                ...this.data.slice(
-                    this.firstIndex,
-                    this.firstIndex + maxBeginningLength
-                ),
-                // [567
-                ...this.data.slice(0, maxEndLength),
-            ] as T[];
+            // 01234]
+            arrayCopy(
+                this.data,
+                result,
+                this.firstIndex,
+                0,
+                maxBeginningLength
+            );
+            // [567
+            arrayCopy(this.data, result, 0, maxBeginningLength, maxEndLength);
+
+            return result;
+
             // design note: much faster than iteration ([...buffer])
             // but I wish javascript had a memcopy-like function for
             // copying items from a section of one array to a section of another.
             //
             // This requires the slice function to create a "middleman" array that isn't really necessary.
+            //
+            // splice does not count because it requires a rest parameter instead of an array.
+            // in testing, this function IS faster if re-written to use splice but the issue
+            // is that to use splice, the entire array being spliced in must be copied onto the
+            // call stack as though each item was a local variable, even if the array is 500,000 items long
+            // this leads to overflowing the call stack when splicing large arrays. If splice took an array
+            // instead of using a rest parameter, it would be the superior solution.
         } else {
-            // data: [---01234567---]
             // Much simpler scenario. Elements are somewhere within the data array, not split in the middle.
+            // data: [---01234567---]
 
-            return this.data.slice(
+            // arrayCopy(this.data, result, this.offset, 0, length);
+            const result = this.data.slice(
                 this.offset,
-                this.offset + Math.min(maxLength, this.size)
+                this.offset + Math.min(this.size, length)
             ) as T[];
+            result.length = length;
+            return result;
         }
     }
 
     /**
      * copies the contents of the circular buffer into a new circular buffer.
+     * @param maxSize The maximum size of the new Circular buffer.
      */
     public clone(maxSize?: number): CircularBuffer<T> {
         if (maxSize === undefined || maxSize === this.maxSize) {
@@ -214,10 +270,6 @@ export default class CircularBuffer<T> extends Collection<T> {
             );
         } else {
             const data: (T | undefined)[] = this.toArray(maxSize);
-
-            if (maxSize > this.maxSize) {
-                data[maxSize - 1] = undefined;
-            }
 
             return CircularBuffer.privateConstructor(
                 maxSize,
@@ -241,20 +293,25 @@ export default class CircularBuffer<T> extends Collection<T> {
      * Appends the element to the end of the buffer (which would be removed by {@link pop}).
      * Removing the first element if the buffer is full.
      */
-    public push(item: T): void {
+    public push(...items: readonly T[]): void {
         if (this.maxSize === 0) return;
-        this.incrementFinalIndex();
-        this.data[this.finalIndex] = item;
+        for (const item of items) {
+            this.incrementFinalIndex();
+            this.data[this.finalIndex] = item;
+        }
     }
 
     /**
      * Appends the element to the start of the buffer (which would be removed by {@link shift}).
      * Removes the final element if the buffer was full.
      */
-    public unshift(item: T): void {
+    public unshift(...items: readonly T[]): void {
         if (this.maxSize === 0) return;
-        this.decrementFirstIndex();
-        this.data[this.firstIndex] = item;
+        for (let i = items.length - 1; i >= 0; i--) {
+            const item = items[i] as T;
+            this.decrementFirstIndex();
+            this.data[this.firstIndex] = item;
+        }
     }
 
     /**
@@ -267,8 +324,8 @@ export default class CircularBuffer<T> extends Collection<T> {
         const finalIndex = this.finalIndex;
         const result = this.data[finalIndex];
 
-        // set value to undefined to allow garbage collection.
-        this.data[finalIndex] = undefined;
+        // delete to allow garbage collection.
+        delete this.data[finalIndex];
 
         // shrink items
         this.decrementFinalIndex();
@@ -286,8 +343,8 @@ export default class CircularBuffer<T> extends Collection<T> {
         const firstIndex = this.firstIndex;
         const result = this.data[firstIndex];
 
-        // set value to undefined to allow garbage collection
-        this.data[firstIndex] = undefined;
+        // delete to allow garbage collection
+        delete this.data[firstIndex];
 
         // shrink items
         this.incrementedFirstIndex();
@@ -352,7 +409,7 @@ export default class CircularBuffer<T> extends Collection<T> {
     private get beginningLength(): number {
         return this.maxSize - this.offset;
     }
-
+    
     /**
      * The length of the end section of the data if the data {@link isSplit}. Nonsense otherwise.
      * ```
