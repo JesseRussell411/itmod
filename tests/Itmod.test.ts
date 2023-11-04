@@ -1660,7 +1660,7 @@ test("collapse", () => {
 });
 
 describe("sequenceEqual", () => {
-    describe("default id function", () => {
+    describe("default is function", () => {
         test("equal", () => {
             expect(
                 Itmod.of(1, 4, 5, 5, 6, 7, 8).sequenceEquals([
