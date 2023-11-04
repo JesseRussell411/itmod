@@ -322,8 +322,12 @@ export default class Itmod<T> implements Iterable<T> {
         const self = this;
         return function map<R>(
             mapping: (value: T, index: number) => R
-        ): MappedItmod<T, R> {
-            return new MappedItmod(self, mapping);
+        ): Itmod<R> {
+            if (mapping === identity) {
+                return self as unknown as Itmod<R>;
+            } else {
+                return new MappedItmod(self, mapping);
+            }
         };
     }
 
@@ -520,8 +524,8 @@ export default class Itmod<T> implements Iterable<T> {
             finalize: (result: any, count: number) => any = identity
         ): any {
             const source = self.getSource();
-
             const iterator = source[Symbol.iterator]();
+
             let next = iterator.next();
             if (next.done) {
                 return undefined;
@@ -566,10 +570,10 @@ export default class Itmod<T> implements Iterable<T> {
             finalize: (result: any, count: number) => any = identity
         ) {
             const source = self.getSource();
+            const iterator = source[Symbol.iterator]();
 
             let accumulator = initialValue;
             let i = 0;
-            const iterator = source[Symbol.iterator]();
             let next: IteratorResult<T>;
             while (!(next = iterator.next()).done) {
                 accumulator = reducer(accumulator, next.value, i);
@@ -800,8 +804,8 @@ export default class Itmod<T> implements Iterable<T> {
             otherId: (item: O) => any = id
         ): Itmod<T | O> {
             return new Itmod({}, function* () {
+                const source = self.getSource();
                 if (id === identity && otherId === identity) {
-                    const source = self.getSource();
                     let set: ReadonlySet<T | O>;
                     let list: Iterable<T | O>;
 
@@ -828,7 +832,7 @@ export default class Itmod<T> implements Iterable<T> {
                     }
                 } else {
                     const set = Itmod.from(other).map(otherId).asSet();
-                    for (const item of self) {
+                    for (const item of source) {
                         if (set.has(id(item))) {
                             yield item;
                         }
@@ -1190,7 +1194,7 @@ export default class Itmod<T> implements Iterable<T> {
     /** Alias for `.map((item, i) => [i, item])` */
     public get indexed() {
         const self = this;
-        return function indexed(): MappedItmod<T, [index: number, item: T]> {
+        return function indexed(): Itmod<[index: number, item: T]> {
             return self.map((item, index) => [index, item]);
         };
     }
@@ -1405,27 +1409,6 @@ export default class Itmod<T> implements Iterable<T> {
             );
         };
     }
-
-    // public get groupBy(): {
-    //     <K>(keySelector: (item: T, index: number) => K): Itmod<
-    //         [key: K, group: T[]]
-    //     >;
-    //     <K, G>(
-    //         keySelector: (item: T, index: number) => K,
-    //         groupSelector: (group: T[]) => G
-    //     ): Itmod<[key: K, group: G]>;
-    // } {
-    //     const self = this;
-    //     const externalGroupBy = groupBy;
-    //     return function groupBy<K>(
-    //         keySelector: (item: T, index: number) => K,
-    //         groupSelector?: (group: T[]) => any
-    //     ) {
-    //         return new Itmod({ fresh: true, expensive: true }, () =>
-    //             externalGroupBy(self, keySelector, groupSelector)
-    //         );
-    //     };
-    // }
 
     public get split(): {
         (deliminator: Iterable<T>): Itmod<T[]>;
@@ -2046,7 +2029,6 @@ export default class Itmod<T> implements Iterable<T> {
      *
      * @param other The given Iterable.
      * @param is Returns whether the two given items are considered equal.
-     *
      */
     public get sequenceEquals() {
         const self = this;
@@ -2055,7 +2037,7 @@ export default class Itmod<T> implements Iterable<T> {
             /**
              * @default Object.is
              */
-            is: (a: T, b: O) => boolean = (a, b) => Object.is(a, b)
+            is: (a: T, b: O) => boolean = Object.is
         ) {
             const source = self.getSource();
 
@@ -2134,27 +2116,13 @@ export default class Itmod<T> implements Iterable<T> {
 export class SortedItmod<T> extends Itmod<T> {
     private readonly original: Itmod<T>;
     private readonly orders: readonly Order<T>[];
-    private readonly config: { preSorted?: boolean };
     private readonly comparator: Comparator<T>;
-    public constructor(
-        original: Itmod<T>,
-        orders: readonly Order<T>[],
-        {
-            preSorted = false,
-        }: {
-            /** The source has already been sorted. */
-            preSorted?: boolean;
-        } = {}
-    ) {
-        if (preSorted) {
-            super(original.properties, original.getSource);
-        } else {
-            super({ fresh: true, expensive: true }, () => {
-                const array = original.toArray();
-                array.sort(comparator);
-                return array;
-            });
-        }
+    public constructor(original: Itmod<T>, orders: readonly Order<T>[]) {
+        super({ fresh: true, expensive: true }, () => {
+            const array = original.toArray();
+            array.sort(comparator);
+            return array;
+        });
 
         this.orders = orders;
         this.original = original;
@@ -2168,7 +2136,6 @@ export class SortedItmod<T> extends Itmod<T> {
             return 0;
         };
         this.comparator = comparator;
-        this.config = { preSorted };
     }
 
     /**
@@ -2204,28 +2171,16 @@ export class SortedItmod<T> extends Itmod<T> {
 
     public get take() {
         const self = this;
-        if (self.config.preSorted) {
-            return function take(count: number | bigint) {
-                return self.original.take(count);
-            };
-        } else {
-            return function take(count: number | bigint) {
-                return self.original.min(count, self.comparator);
-            };
-        }
+        return function take(count: number | bigint) {
+            return self.original.min(count, self.comparator);
+        };
     }
 
     public get takeFinal() {
         const self = this;
-        if (self.config.preSorted) {
-            return function takeFinal(count: number | bigint) {
-                return self.original.takeFinal(count);
-            };
-        } else {
-            return function takeFinal(count: number | bigint) {
-                return self.original.max(count, self.comparator);
-            };
-        }
+        return function takeFinal(count: number | bigint) {
+            return self.original.max(count, self.comparator);
+        };
     }
 
     // TODO skip and skipFinal
@@ -2261,6 +2216,7 @@ export class MappedItmod<T, R> extends Itmod<R> {
                 i++;
             }
         });
+
         this.mapping = mapping;
         this.original = original;
         this.config = { indexOffset };
@@ -2300,8 +2256,10 @@ export class MappedItmod<T, R> extends Itmod<R> {
         return function takeFinal(count: number | bigint): Itmod<R> {
             // check if mapping function uses the index.
             if (self.mapping.length >= 2) {
-                return self.original
-                    .indexed()
+                return new MappedItmod(
+                    self.original,
+                    (item, index) => [index, item] as const
+                )
                     .parentTakeFinal(count)
                     .map(([index, item]) => self.mapping(item, index));
             } else {
@@ -2321,8 +2279,10 @@ export class MappedItmod<T, R> extends Itmod<R> {
         return function skipFinal(count: number | bigint): Itmod<R> {
             // check if mapping function uses the index.
             if (self.mapping.length >= 2) {
-                return self.original
-                    .indexed()
+                return new MappedItmod(
+                    self.original,
+                    (item, index) => [index, item] as const
+                )
                     .parentSkipFinal(count)
                     .map(([index, item]) => self.mapping(item, index));
             } else {
@@ -2342,8 +2302,10 @@ export class MappedItmod<T, R> extends Itmod<R> {
         return function takeEveryNth(count: number | bigint): Itmod<R> {
             // check if mapping function uses the index.
             if (self.mapping.length >= 2) {
-                return self.original
-                    .indexed()
+                return new MappedItmod(
+                    self.original,
+                    (item, index) => [index, item] as const
+                )
                     .parentTakeEveryNth(count)
                     .map(([index, item]) => self.mapping(item, index));
             } else {
@@ -2384,8 +2346,10 @@ export class MappedItmod<T, R> extends Itmod<R> {
         return function skipEveryNth(count: number | bigint): Itmod<R> {
             // check if mapping function uses the index.
             if (self.mapping.length >= 2) {
-                return self.original
-                    .indexed()
+                return new MappedItmod(
+                    self.original,
+                    (item, index) => [index, item] as const
+                )
                     .parentSkipEveryNth(count)
                     .map(([index, item]) => self.mapping(item, index));
             } else {
@@ -2426,8 +2390,10 @@ export class MappedItmod<T, R> extends Itmod<R> {
         return function reverse(): Itmod<R> {
             // check if mapping function uses the index.
             if (self.mapping.length >= 2) {
-                return self.original
-                    .indexed()
+                return new MappedItmod(
+                    self.original,
+                    (item, index) => [index, item] as const
+                )
                     .parentReverse()
                     .map(([index, item]) => self.mapping(item, index));
             } else {
@@ -2444,8 +2410,10 @@ export class MappedItmod<T, R> extends Itmod<R> {
         return function shuffle(): Itmod<R> {
             // check if mapping function uses the index.
             if (self.mapping.length >= 2) {
-                return self.original
-                    .indexed()
+                return new MappedItmod(
+                    self.original,
+                    (item, index) => [index, item] as const
+                )
                     .parentShuffle()
                     .map(([index, item]) => self.mapping(item, index));
             } else {
@@ -2514,9 +2482,9 @@ export class GroupedItmod<
         ? SubT
         : never
 > {
+    private readonly original: Itmod<T>;
     private readonly keySelector: KeySelector;
     private readonly additionalKeySelectors: AdditionalKeySelectors;
-    private readonly original: Itmod<T>;
     private readonly groupMapping: (items: T[]) => Group;
     public constructor(
         original: Itmod<T>,
@@ -2676,7 +2644,7 @@ function split<T, O>(
     deliminator: Iterable<O>,
     equalityChecker: (t: T, o: O) => boolean = Object.is
 ): Iterable<T[]> {
-    const delim = [...deliminator];
+    const delim = toArray(deliminator);
     return {
         *[Symbol.iterator]() {
             let chunk: T[] = [];
@@ -2783,7 +2751,7 @@ function groupJoinByComparison<O, I, R>(
 ): Iterable<R> {
     return {
         *[Symbol.iterator]() {
-            const innerCached = [...right];
+            const innerCached = toArray(right);
 
             for (const o of left) {
                 const innerGroup: I[] = [];
@@ -2834,7 +2802,7 @@ function joinByComparison<A, B, R>(
 ) {
     return {
         *[Symbol.iterator]() {
-            const rightCached = [...right];
+            const rightCached = toArray(right);
             for (const item of left) {
                 let matchingRightItem: B | undefined = undefined;
                 let itemFound = false;
@@ -2855,15 +2823,6 @@ function joinByComparison<A, B, R>(
         },
     };
 }
-
-// export type GroupByRecursiveResult<
-//     Keys extends readonly any[],
-//     Group
-// > = Keys extends readonly [infer Key, ...infer Rest]
-//     ? Rest["length"] extends 0
-//         ? Map<Key, Group>
-//         : Map<Key, GroupByRecursiveResult<Rest, Group>>
-//     : Group;
 
 export type GroupByRecursiveResult<
     Keys extends readonly any[],
@@ -2900,7 +2859,7 @@ function groupByRecursive<
 ): any {
     const [keySelector, ...rest] = keySelectors;
 
-    if (keySelector === undefined) return groupSelector([...items]);
+    if (keySelector === undefined) return groupSelector(toArray(items));
 
     return groupBy(
         items,
