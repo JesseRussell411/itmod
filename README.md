@@ -35,3 +35,138 @@ console.log("mean:", mean);
 
 `Itmod.fromObject({one: 1, two: 2, three: 3}).append(["four", 4]).toObject()` => `{one: 1, two: 2, three: 3, four: 4}`
 
+# Itmod's methods
+
+### forEach
+
+### map
+
+### flat
+
+### filter
+
+### defined
+
+### notNull
+
+### notNullish
+
+### zip
+
+### reduce
+
+### fold
+
+### concat
+
+### preConcat
+
+### append
+
+### prepend
+
+### reverse
+
+### repeat
+
+### first
+
+### final
+
+### distinct
+
+### union
+
+### intersection
+
+### difference
+
+### take
+
+### takeFinal
+
+### takeEveryNth
+
+### takeWhile
+
+### skip
+
+### skipFinal
+
+### skipEveryNth
+
+### skipWhile
+
+### copyWithin
+
+### indexed
+
+### includes
+
+### some
+
+### none
+
+### every
+
+### nonIteratedCountOrUndefined
+
+### count
+
+### min
+
+### max
+
+### groupBy
+
+### split
+
+### partitionBySize
+
+### groupJoin
+
+### innerGroupJoin
+
+### join
+
+### innerJoin
+
+### toArray
+
+### toSet
+
+### toMap
+
+### indexBy
+
+### toObject
+
+### asArray
+
+### asSet
+
+### asMap
+
+### asObject
+
+### sort
+
+### sortDescending
+
+### shuffle
+
+### collapse
+
+### sequenceEquals
+
+### makeString
+
+# SortedItmod's methods
+
+### thenBy
+
+### thenByDescending
+
+# GroupedItmod's methods
+
+### mapGroups
