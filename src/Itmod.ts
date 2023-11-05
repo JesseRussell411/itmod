@@ -1,6 +1,5 @@
 import CircularBuffer from "./collections/CircularBuffer";
 import Collection from "./collections/Collection";
-import LinkedList from "./collections/LinkedList";
 import SortedSequence from "./collections/SortedSequence";
 import { asArray, asIterable, asSet } from "./collections/as";
 import {
@@ -15,7 +14,6 @@ import {
     emptyIterable,
     nonIteratedCountOrUndefined,
     range,
-    wrapIterator,
 } from "./collections/iterables";
 import { toArray, toSet } from "./collections/to";
 import { identity, resultOf, returns } from "./functional/functions";
@@ -34,20 +32,20 @@ import {
     asComparator,
     autoComparator,
     cmpGE,
-    cmpGT,
     cmpLT,
     cmpNQ,
     reverseOrder,
 } from "./sorting";
 import MapEntryLike from "./types/MapEntryLike";
 import { ReturnTypes } from "./types/functions";
-import { IterableType as IterableType } from "./types/iterable";
 
 // TODO unit tests
 
 // TODO takeSparse, skipSparse, ifEmpty, partition by count
 
 // TODO? RangeItmod for efficient take, takeFinal, skip, skipFinal, takeEveryNth operations. Result of Itmod.range()
+
+// TODO remove all uses of any, unless absolutely necessary
 
 export type Comparison =
     | "equals"
@@ -662,18 +660,15 @@ export default class Itmod<T> implements Iterable<T> {
             if (times === 0) return Itmod.empty();
 
             return new Itmod({}, function* () {
-                const source = self.getSource();
-                const cached = isSolid(source)
-                    ? source
-                    : cachedIterable(source);
+                const array = self.asArray();
 
                 if (times === Infinity) {
                     while (true) {
-                        yield* cached;
+                        yield* array;
                     }
                 } else {
                     for (let i = zeroLike(times); i < times; i++) {
-                        yield* cached;
+                        yield* array;
                     }
                 }
             });
@@ -1234,6 +1229,9 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * Alias for `!this.some(condition)`
+     */
     public get none() {
         const self = this;
         return function none(
@@ -2088,23 +2086,33 @@ export default class Itmod<T> implements Iterable<T> {
         (start: any, separator: any, end: any): string;
     } {
         const self = this;
-        const externalMakeString = makeString;
         return function makeString(
             ...args: [any, any, any] | [any, any] | [any] | []
         ): string {
-            if (args.length === 0) {
-                return externalMakeString(self.getSource());
-            } else if (args.length === 1) {
-                const separator = args[0];
-                return externalMakeString(self.getSource(), separator);
+            if (args.length === 0 || args.length === 1) {
+                const [separator] = args;
+                return self.makeString("", separator, "");
             } else {
-                const [start, separator, end] = args;
-                return externalMakeString(
-                    self.getSource(),
-                    start,
-                    separator,
-                    end
-                );
+                let [start, separator, end] = args;
+
+                if (typeof start !== "string") start = `${start}`;
+                if (typeof separator !== "string") separator = `${separator}`;
+                if (typeof end !== "string") end = `${end}`;
+
+                const source = self.getSource();
+
+                if (typeof source === "string" && separator === "") {
+                    // This check may or may not be necessary. I have no way to test if it is.
+                    // Other than by testing memory usage maybe? Or can you do a heap dump in javascript?
+                    // maybe use the debugger
+                    if (start === "" && end === "") {
+                        return source;
+                    } else {
+                        return start + source + end;
+                    }
+                }
+
+                return start + asArray(source).join(separator) + end;
             }
         };
     }
@@ -2545,15 +2553,6 @@ function isOne(n: number | bigint): n is 1 | 0n {
     return n === 1 || n === 1n;
 }
 
-function isSolid<T>(iterable: Iterable<T>): boolean {
-    return (
-        isArray(iterable) ||
-        iterable instanceof Set ||
-        iterable instanceof Map ||
-        iterable instanceof Collection
-    );
-}
-
 function toMap<T>(
     source: Iterable<T>,
     keySelector: (item: T, index: number) => any = (i: any) => i?.[0],
@@ -2593,46 +2592,13 @@ function fisherYatesShuffle(
     }
 }
 
+/**
+ * Uses {@link Math.random} to produce a random whole number that is greater than or equal to 0 and less than the given upperBound.
+ * @param upperBound The whole number returned will be less than this.
+ * @returns The whole number.
+ */
 function defaultGetRandomInt(upperBound: number) {
     return Math.trunc(Math.random() * upperBound);
-}
-
-function makeString(
-    collection: Iterable<unknown>,
-    startOrSeparator: unknown = "",
-    separator: unknown = "",
-    end: unknown = ""
-): string {
-    if (arguments.length === 2) {
-        const separator = startOrSeparator;
-        return makeString(collection, "", separator, "");
-    }
-
-    const start = startOrSeparator;
-
-    if (typeof start !== "string") {
-        return makeString(collection, `${start}`, separator, end);
-    }
-
-    if (typeof separator !== "string") {
-        return makeString(collection, start, `${separator}`, end);
-    }
-
-    if (typeof end !== "string") {
-        return makeString(collection, start, separator, `${end}`);
-    }
-
-    if (typeof collection === "string" && separator === "") {
-        // This check may or may not be necessary. I have no way to test if it is.
-        // Other than by testing memory usage maybe? Or can you do a heap dump in javascript?
-        if (start === "" && end === "") {
-            return collection;
-        } else {
-            return start + collection + end;
-        }
-    }
-
-    return start + asArray(collection).join(separator) + end;
 }
 
 /**
