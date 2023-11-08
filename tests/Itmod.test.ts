@@ -749,43 +749,43 @@ describe("skipWhile", () => {
     });
 });
 
-// describe("takeRandom", () => {
-//     test("0 from 10", () => {
-//         expect(Itmod.range(1, 11).shuffle().take(0).toArray()).toEqual([]);
-//     });
-//     test("4 from 10", () => {
-//         expect(Itmod.range(1, 11).shuffle().take(4).count()).toBe(4);
-//     });
-//     test("5 from 10", () => {
-//         expect(Itmod.range(1, 11).shuffle().take(5).count()).toBe(5);
-//     });
-//     test("15 from 10", () => {
-//         expect(Itmod.range(1, 11).shuffle().take(15).count()).toBe(10);
-//     });
-//     test("results are unique", () => {
-//         expect(Itmod.range(1, 11).shuffle().take(5).distinct().count()).toBe(5);
-//     });
-// });
+describe("takeRandom", () => {
+    test("0 from 10", () => {
+        expect(Itmod.range(1, 11).shuffle().take(0).toArray()).toEqual([]);
+    });
+    test("4 from 10", () => {
+        expect(Itmod.range(1, 11).shuffle().take(4).count()).toBe(4);
+    });
+    test("5 from 10", () => {
+        expect(Itmod.range(1, 11).shuffle().take(5).count()).toBe(5);
+    });
+    test("15 from 10", () => {
+        expect(Itmod.range(1, 11).shuffle().take(15).count()).toBe(10);
+    });
+    test("results are unique", () => {
+        expect(Itmod.range(1, 11).shuffle().take(5).distinct().count()).toBe(5);
+    });
+});
 
-// describe("skipRandom", () => {
-//     test("0 from 10", () => {
-//         expect(Itmod.range(1, 11).skipRandom(0).toArray()).toEqual([
-//             1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-//         ]);
-//     });
-//     test("4 from 10", () => {
-//         expect(Itmod.range(1, 11).skipRandom(4).count()).toBe(6);
-//     });
-//     test("5 from 10", () => {
-//         expect(Itmod.range(1, 11).skipRandom(5).count()).toBe(5);
-//     });
-//     test("15 from 10", () => {
-//         expect(Itmod.range(1, 11).skipRandom(15).count()).toBe(0);
-//     });
-//     test("results are unique", () => {
-//         expect(Itmod.range(1, 11).skipRandom(5).distinct().count()).toBe(5);
-//     });
-// });
+describe("skipRandom", () => {
+    test("0 from 10", () => {
+        expect(Itmod.range(1, 11).skipRandom(0).toArray()).toEqual([
+            1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+        ]);
+    });
+    test("4 from 10", () => {
+        expect(Itmod.range(1, 11).skipRandom(4).count()).toBe(6);
+    });
+    test("5 from 10", () => {
+        expect(Itmod.range(1, 11).skipRandom(5).count()).toBe(5);
+    });
+    test("15 from 10", () => {
+        expect(Itmod.range(1, 11).skipRandom(15).count()).toBe(0);
+    });
+    test("results are unique", () => {
+        expect(Itmod.range(1, 11).skipRandom(5).distinct().count()).toBe(5);
+    });
+});
 
 describe("nonIteratedCountOrUndefined", () => {
     test("from Array", () => {
@@ -1710,7 +1710,7 @@ describe("sequenceEqual", () => {
 });
 
 // TODO test for every method in itmod and its children
-// TODO tests for includes, some, every, distinct, defined, notNull, zip, including, makeString, flat, split, partitionBySize, append, prepend, min without count and max without count, groupJoin, join, innerGroupJoin, innerJoin, union, intersection, difference
+// TODO tests for includes, some, every, distinct, defined, notNull, zip, including, makeString, flat, split, partitionBySize, append, prepend, min without count and max without count, groupJoin, join, innerGroupJoin, innerJoin, union, intersection, difference, replaceWhenEmpty
 
 /*
  * TODO list of special cases to test

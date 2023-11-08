@@ -1,6 +1,6 @@
 {
   "name": "iterator-modifier",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "A Linq clone. Attempts to be the best Linq clone. Use the from method on the Itmod class to query an iterable.",
   "main": "dist/Itmod.js",
   "files": [
@@ -50,5 +50,8 @@
   "bugs": {
     "url": "https://github.com/JesseRussell411/itmod/issues"
   },
-  "homepage": "https://github.com/JesseRussell411/itmod#readme"
+  "homepage": "https://github.com/JesseRussell411/itmod#readme",
+  "prettier":{
+    "tabWidth": 4
+  }
 }

@@ -39,18 +39,13 @@ import { ReturnTypes } from "./types/functions";
 
 // TODO unit tests
 
-// TODO takeSparse, skipSparse, ifEmpty, partition by count
+// TODO takeSparse, skipSparse, partition by count
 
 // TODO? RangeItmod for efficient take, takeFinal, skip, skipFinal, takeEveryNth operations. Result of Itmod.range()
 
 // TODO remove all uses of any, unless absolutely necessary
 
-export type Comparison =
-    | "equals"
-    | "lessThan"
-    | "greaterThan"
-    | "lessThanOrEqualTo"
-    | "greaterThanOrEqualTo";
+// design note: the purpose of every function being an accessor (get) is to bind "this" on each method without making them fields and making every instance of Itmod take loads of memory just to exist.
 
 /**
  * Information about an {@link Itmod} and its Iterable.
@@ -63,7 +58,9 @@ export type ItmodProperties<_> = Readonly<
          * mutable collection like {@link Array}.
          */
         fresh: boolean;
-        /** Calling the source getter is expensive, ie. it's more than an O(1) operation. */
+        /**
+         * Calling the source getter is expensive, ie. it's more than an O(1) operation.
+         */
         expensive: boolean;
     }>
 >;
@@ -213,18 +210,25 @@ export default class Itmod<T> implements Iterable<T> {
     ): Itmod<T> {
         requireNonNegative(requireIntegerOrInfinity(count));
 
-        return new Itmod({}, function* () {
-            let i = zeroLike(count);
-            if (generatorOrItem instanceof Function) {
+        if (generatorOrItem === identity) {
+            return range(count) as unknown as Itmod<T>;
+        }
+
+        if (generatorOrItem instanceof Function) {
+            return new Itmod({}, function* () {
+                let i = zeroLike(count);
                 for (; i < count; i++) {
                     yield generatorOrItem(i);
                 }
-            } else {
+            });
+        } else {
+            let i = zeroLike(count);
+            return new Itmod({}, function* () {
                 for (; i < count; i++) {
                     yield generatorOrItem;
                 }
-            }
-        });
+            });
+        }
     }
 
     // crazy control flow concoctions
@@ -787,23 +791,24 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    // set operations:
+
     /**
      * Performs the set operation, union.
      * @returns The items found in this Itmod plus the items in the given iterable, unless they where already in the Itmod.
      */
     public get union(): {
-        (other: Iterable<T>): Itmod<T>;
         (
             other: Iterable<T>,
             /** How to identify each item. Defaults to {@link identity}.*/
-            id: (item: T) => any
+            id?: (item: T) => any
         ): Itmod<T>;
         <O>(
             other: Iterable<O>,
-            /** How to identify each item. Defaults to {@link identity}.*/
-            id?: (item: T) => any,
-            /** How to identify each item from the given iterable. Defaults to {@link identity} or the the identity function given for each of the Itmod's own items.*/
-            otherId?: (item: O) => any
+            /** How to identify each item from the itmod. Defaults to {@link identity}.*/
+            id: ((item: T) => any) | undefined,
+            /** How to identify each item from the given iterable. Defaults to the identity function given for each of the Itmod's own items.*/
+            otherId: (item: O) => any
         ): Itmod<T | O>;
     } {
         const self = this;
@@ -837,18 +842,17 @@ export default class Itmod<T> implements Iterable<T> {
      * @returns The items found in this Itmod and in the given iterable.
      */
     public get intersection(): {
-        (other: Iterable<T>): Itmod<T>;
         (
             other: Iterable<T>,
             /** How to identify each item. Defaults to {@link identity}.*/
-            id: (item: T) => any
+            id?: (item: T) => any
         ): Itmod<T>;
         <O>(
             other: Iterable<O>,
-            /** How to identify each item. Defaults to {@link identity}.*/
-            id?: (item: T) => any,
-            /** How to identify each item from the given iterable. Defaults to {@link identity} or the the identity function given for each of the Itmod's own items.*/
-            otherId?: (item: O) => any
+            /** How to identify each item from the itmod. Defaults to {@link identity}.*/
+            id: ((item: T) => any) | undefined,
+            /** How to identify each item from the given iterable. Defaults to the identity function given for each of the Itmod's own items.*/
+            otherId: (item: O) => any
         ): Itmod<T>;
     } {
         const self = this;
@@ -901,18 +905,17 @@ export default class Itmod<T> implements Iterable<T> {
      * @returns The items found in this Itmod but not in the given iterable.
      */
     public get difference(): {
-        (other: Iterable<T>): Itmod<T>;
         (
             other: Iterable<T>,
             /** How to identify each item. Defaults to {@link identity}.*/
-            id: (item: T) => any
+            id?: (item: T) => any
         ): Itmod<T>;
         <O>(
             other: Iterable<O>,
-            /** How to identify each item. Defaults to {@link identity}.*/
-            id?: (item: T) => any,
-            /** How to identify each item from the given iterable. Defaults to {@link identity} or the the identity function given for each of the Itmod's own items.*/
-            otherId?: (item: O) => any
+            /** How to identify each item from the itmod. Defaults to {@link identity}.*/
+            id: ((item: T) => any) | undefined,
+            /** How to identify each item from the given iterable. Defaults to the identity function given for each of the Itmod's own items.*/
+            otherId: (item: O) => any
         ): Itmod<T | O>;
     } {
         const self = this;
@@ -955,7 +958,14 @@ export default class Itmod<T> implements Iterable<T> {
                 },
                 () => {
                     const source = self.getSource();
+
                     if (count === Infinity) return source;
+                    if (isZero(count)) return emptyIterable();
+
+                    const size = nonIteratedCountOrUndefined(source);
+                    if (size !== undefined && size <= count) {
+                        return source;
+                    }
 
                     // optimization for fresh array
                     if (self.properties.fresh && isArrayAsWritable(source)) {
@@ -963,25 +973,15 @@ export default class Itmod<T> implements Iterable<T> {
                         return source;
                     }
 
-                    if (isZero(count)) return emptyIterable();
+                    return (function* () {
+                        const iterator = source[Symbol.iterator]();
+                        for (let i = zeroLike(count); i < count; i++) {
+                            const next = iterator.next();
+                            if (next.done) break;
 
-                    const size = nonIteratedCountOrUndefined(source);
-
-                    if (size !== undefined && count >= size) {
-                        return source;
-                    }
-
-                    return {
-                        *[Symbol.iterator]() {
-                            const iterator = source[Symbol.iterator]();
-                            for (let i = zeroLike(count); i < count; i++) {
-                                const next = iterator.next();
-                                if (next.done) break;
-
-                                yield next.value;
-                            }
-                        },
-                    };
+                            yield next.value;
+                        }
+                    })();
                 }
             );
         };
@@ -1019,18 +1019,16 @@ export default class Itmod<T> implements Iterable<T> {
                 if (n === Infinity) return emptyIterable();
                 if (isOne(n)) return source;
 
-                return {
-                    *[Symbol.iterator]() {
-                        let i = zeroLike(n);
-                        for (const item of source) {
-                            i++;
-                            if (i >= n) {
-                                yield item;
-                                i = zeroLike(n);
-                            }
+                return (function* () {
+                    let i = zeroLike(n);
+                    for (const item of source) {
+                        i++;
+                        if (i >= n) {
+                            yield item;
+                            i = zeroLike(n);
                         }
-                    },
-                };
+                    }
+                })();
             });
         };
     }
@@ -1059,30 +1057,48 @@ export default class Itmod<T> implements Iterable<T> {
                         return source;
                     }
 
-                    return {
-                        *[Symbol.iterator]() {
-                            let i = 0;
-                            for (const item of source) {
-                                if (!condition(item, i)) break;
-                                yield item;
-                                i++;
-                            }
-                        },
-                    };
+                    return (function* () {
+                        let i = 0;
+                        for (const item of source) {
+                            if (!condition(item, i)) break;
+                            yield item;
+                            i++;
+                        }
+                    })();
                 }
             );
         };
     }
-    // TODO rewrite to maintain original order
-    // public get takeRandom() {
-    //     const self = this;
-    //     return function takeRandom(
-    //         count: number | bigint,
-    //         getRandomInt?: (upperBound: number) => number
-    //     ) {
-    //         return self.shuffle(getRandomInt).take(count);
-    //     };
-    // }
+
+    public get takeRandom() {
+        const self = this;
+        return function takeRandom(
+            count: number | bigint,
+            getRandomInt?: (upperBound: number) => number
+        ): Itmod<T> {
+            return new Itmod({ expensive: true }, () => {
+                let source = self.getSource();
+                let size = nonIteratedCountOrUndefined(source);
+                if (size === undefined) {
+                    // convert source to an array
+                    const array = [...source];
+                    source = array;
+
+                    // get length of the array
+                    size = array.length;
+                }
+
+                const indexesToTake = range(size)
+                    .shuffle(getRandomInt)
+                    .take(count)
+                    .asSet();
+
+                return from(source).filter((_, index) =>
+                    indexesToTake.has(index)
+                );
+            });
+        };
+    }
 
     /**
      * Skips the first given number of items, keeping the rest.
@@ -1101,33 +1117,28 @@ export default class Itmod<T> implements Iterable<T> {
                 if (size !== undefined && count >= size) return emptyIterable();
 
                 if (isArray(source)) {
-                    return {
-                        *[Symbol.iterator]() {
-                            const numberCount = Number(count);
-                            if (numberCount === Infinity)
-                                return emptyIterable();
-                            for (let i = numberCount; i < source.length; i++) {
-                                yield source[i] as T;
-                            }
-                        },
-                    };
+                    return (function* () {
+                        const numberCount = Number(count);
+                        if (numberCount === Infinity) return emptyIterable();
+                        for (let i = numberCount; i < source.length; i++) {
+                            yield source[i] as T;
+                        }
+                    })();
                 } else {
-                    return {
-                        *[Symbol.iterator]() {
-                            const iterator = source[Symbol.iterator]();
-                            let next = iterator.next();
+                    return (function* () {
+                        const iterator = source[Symbol.iterator]();
+                        let next = iterator.next();
 
-                            for (let i = zeroLike(count); i < count; i++) {
-                                if (next.done) return;
-                                next = iterator.next();
-                            }
+                        for (let i = zeroLike(count); i < count; i++) {
+                            if (next.done) return;
+                            next = iterator.next();
+                        }
 
-                            while (!next.done) {
-                                yield next.value;
-                                next = iterator.next();
-                            }
-                        },
-                    };
+                        while (!next.done) {
+                            yield next.value;
+                            next = iterator.next();
+                        }
+                    })();
                 }
             });
         };
@@ -1144,18 +1155,16 @@ export default class Itmod<T> implements Iterable<T> {
                 const source = self.getSource();
                 if (count === Infinity) return emptyIterable();
                 if (isZero(count)) return source;
-                return {
-                    *[Symbol.iterator]() {
-                        // TODO break out take for an optimization here
+                return (function* () {
+                    // TODO break out take for an optimization here
 
-                        const buffer = new CircularBuffer<T>(Number(count));
+                    const buffer = new CircularBuffer<T>(Number(count));
 
-                        for (const item of source) {
-                            if (buffer.isFull) yield buffer.at(0) as T;
-                            buffer.push(item);
-                        }
-                    },
-                };
+                    for (const item of source) {
+                        if (buffer.isFull) yield buffer.at(0) as T;
+                        buffer.push(item);
+                    }
+                })();
             });
         };
     }
@@ -1170,19 +1179,17 @@ export default class Itmod<T> implements Iterable<T> {
                 }
                 if (isOne(n)) return emptyIterable();
 
-                return {
-                    *[Symbol.iterator]() {
-                        let i = zeroLike(n);
-                        for (const item of source) {
-                            i++;
-                            if (i >= n) {
-                                i = zeroLike(n);
-                            } else {
-                                yield item;
-                            }
+                return (function* () {
+                    let i = zeroLike(n);
+                    for (const item of source) {
+                        i++;
+                        if (i >= n) {
+                            i = zeroLike(n);
+                        } else {
+                            yield item;
                         }
-                    },
-                };
+                    }
+                })();
             });
         };
     }
@@ -1212,16 +1219,35 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
-    // TODO rewrite to maintain original order
-    // public get skipRandom() {
-    //     const self = this;
-    //     return function skipRandom(
-    //         count: number | bigint,
-    //         getRandomInt?: (upperBound: number) => number
-    //     ) {
-    //         return self.shuffle(getRandomInt).skip(count);
-    //     };
-    // }
+    public get skipRandom() {
+        const self = this;
+        return function skipRandom(
+            count: number | bigint,
+            getRandomInt?: (upperBound: number) => number
+        ): Itmod<T> {
+            return new Itmod({ expensive: true }, () => {
+                let source = self.getSource();
+                let size = nonIteratedCountOrUndefined(source);
+                if (size === undefined) {
+                    // convert source to an array
+                    const array = [...source];
+                    source = array;
+
+                    // get length of the array
+                    size = array.length;
+                }
+
+                const indexesToSkip = range(size)
+                    .shuffle(getRandomInt)
+                    .take(count)
+                    .asSet();
+
+                return from(source).filter(
+                    (_, index) => !indexesToSkip.has(index)
+                );
+            });
+        };
+    }
 
     /**
      * Equivalent to {@link Array.copyWithin}.
@@ -1245,7 +1271,7 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
-    /** Alias for `.map((item, i) => [i, item])` */
+    /** Alias for for {@link Itmod.map}`((item, i) => [i, item])` */
     public get indexed() {
         const self = this;
         return function indexed(): Itmod<[index: number, item: T]> {
