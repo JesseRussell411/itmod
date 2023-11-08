@@ -1,6 +1,5 @@
 import Itmod from "../src/Itmod";
 import LinkedList from "../src/collections/LinkedList";
-import NeverEndingOperationError from "../src/errors/NeverEndingOperationError";
 import { breakSignal } from "../src/signals";
 import { autoComparator } from "../src/sorting";
 

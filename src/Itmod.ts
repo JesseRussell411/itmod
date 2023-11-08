@@ -1,7 +1,7 @@
 import CircularBuffer from "./collections/CircularBuffer";
 import Collection from "./collections/Collection";
 import SortedSequence from "./collections/SortedSequence";
-import { asArray, asIterable, asSet } from "./collections/as";
+import { asArray, asIterable, asIterator, asSet } from "./collections/as";
 import {
     isArray,
     isArrayAsWritable,
@@ -10,10 +10,8 @@ import {
     isSetAsWritable,
 } from "./collections/is";
 import {
-    cachingIterable as cachedIterable,
     emptyIterable,
     nonIteratedCountOrUndefined,
-    range,
 } from "./collections/iterables";
 import { toArray, toSet } from "./collections/to";
 import { identity, resultOf, returns } from "./functional/functions";
@@ -126,18 +124,18 @@ export default class Itmod<T> implements Iterable<T> {
     /**
      * @returns An {@link Itmod} over the given items.
      */
-    public static of<T>(...items: readonly T[]): Itmod<T> {
+    public static of<T = never>(...items: readonly T[]): Itmod<T> {
         return new Itmod({}, () => items);
     }
 
     /**
      * @returns An empty {@link Itmod} of the given type.
      */
-    public static empty<T>(): Itmod<T> {
+    public static empty<T = never>(): Itmod<T> {
         return _emptyItmod;
     }
 
-    // TODO don't take non enumerable properties, like what Object.entries does
+    // TODO improve type. I'm going to bed
     /**
      * @returns A Itmod over the entries of the given object.
      */
@@ -151,6 +149,7 @@ export default class Itmod<T> implements Iterable<T> {
         {
             includeStringKeys = true,
             includeSymbolKeys = true,
+            includeNonEnumerable = false,
         }: {
             /**
              * Whether to include fields indexed by symbols.
@@ -162,6 +161,11 @@ export default class Itmod<T> implements Iterable<T> {
              * @default true
              */
             includeStringKeys?: IncludeStringKeys;
+            /**
+             * Whether to include object fields not marked as enumerable.
+             * @default false
+             */
+            includeNonEnumerable?: boolean;
         } = {}
     ): Itmod<
         [
@@ -173,31 +177,28 @@ export default class Itmod<T> implements Iterable<T> {
             V
         ]
     > {
-        const instance = resultOf(object);
-        if (includeStringKeys && includeSymbolKeys) {
-            return new Itmod({ expensive: true, fresh: true }, () =>
-                [
-                    ...Object.getOwnPropertyNames(instance),
-                    ...Object.getOwnPropertySymbols(instance),
-                ].map((key) => [key as any, (instance as any)[key]])
-            );
-        } else if (includeStringKeys) {
-            return new Itmod({ expensive: true, fresh: true }, () =>
-                Object.getOwnPropertyNames(instance).map((name) => [
-                    name as K & (string | symbol),
-                    (instance as any)[name] as V,
-                ])
-            ) as any;
-        } else if (includeSymbolKeys) {
-            return new Itmod({ expensive: true, fresh: true }, () =>
-                Object.getOwnPropertySymbols(instance).map((symbol) => [
-                    symbol as K & (string | symbol),
-                    (instance as any)[symbol] as V,
-                ])
-            ) as any;
-        } else {
-            return Itmod.of();
-        }
+        return from(() => {
+            const instance = resultOf(object);
+
+            return empty()
+                .if(includeStringKeys, (self) =>
+                    self.concat(Object.getOwnPropertyNames(instance))
+                )
+                .if(includeSymbolKeys, (self) =>
+                    self.concat(Object.getOwnPropertySymbols(instance))
+                )
+                .map(
+                    (key) =>
+                        [
+                            key,
+                            Object.getOwnPropertyDescriptor(instance, key)!,
+                        ] as const
+                )
+                .if(!includeNonEnumerable, (self) =>
+                    self.filter(([_, descriptor]) => !!descriptor?.enumerable)
+                )
+                .map(([key, descriptor]) => [key, descriptor.value]) as any;
+        });
     }
 
     // TODO docs
@@ -224,6 +225,73 @@ export default class Itmod<T> implements Iterable<T> {
                 }
             }
         });
+    }
+
+    // crazy control flow concoctions
+
+    public get if(): <R, E = this>(
+        condition: boolean,
+        body: (self: this) => R,
+        else_?: (self: this) => E
+    ) => R | E {
+        const self = this;
+        return function if_<R, E = Itmod<T>>(
+            condition: boolean,
+            body: (self: Itmod<T>) => R,
+            else_: (self: Itmod<T>) => E | Itmod<T> = identity
+        ): R | E | Itmod<T> {
+            if (condition) {
+                return body(self);
+            } else {
+                return else_(self);
+            }
+        } as any;
+    }
+
+    public get applyTo(): <R>(body: (self: this) => R) => R {
+        const self = this;
+        return function applyTo<R>(body: (itmod: Itmod<T>) => R) {
+            return body(self);
+        } as any;
+    }
+
+    /**
+     * Replaces the items in the Itmod with the given alternative (or its result if it's a function), when the Itmod is empty and has no items.
+     */
+    public get replaceEmptyWith() {
+        const self = this;
+        return function whenEmpty(
+            alternative:
+                | Iterable<T>
+                | Iterator<T>
+                | (() => Iterable<T>)
+                | (() => Iterator<T>)
+        ) {
+            return new Itmod(self.properties, () => {
+                const source = self.getSource();
+                const count = nonIteratedCountOrUndefined(source);
+                if (count !== undefined) {
+                    if (count === 0) {
+                        return asIterable(resultOf(alternative));
+                    } else {
+                        return source;
+                    }
+                }
+
+                return (function* () {
+                    let empty = true;
+
+                    for (const item of source) {
+                        yield item;
+                        empty = false;
+                    }
+
+                    if (empty) {
+                        yield* asIterable(resultOf(alternative));
+                    }
+                })();
+            });
+        };
     }
 
     /**
@@ -282,16 +350,16 @@ export default class Itmod<T> implements Iterable<T> {
     ): Itmod<number> | Itmod<bigint> {
         if (_end === undefined) {
             const end = _startOrEnd;
-            return new Itmod({}, returns(range(end)));
+            return new Itmod({}, returns(externalRange(end)));
         } else if (_step === undefined) {
             const start = _startOrEnd;
             const end = _end;
-            return new Itmod({}, returns(range(start, end)));
+            return new Itmod({}, returns(externalRange(start, end)));
         } else {
             const start = _startOrEnd;
             const end = _end;
             const step = _step;
-            return new Itmod({}, returns(range(start, end, step)));
+            return new Itmod({}, returns(externalRange(start, end, step)));
         }
     }
 
@@ -691,19 +759,10 @@ export default class Itmod<T> implements Iterable<T> {
      */
     public get final() {
         const self = this;
+        const externalFinal = final;
         return function final(): T | undefined {
             const source = self.getSource();
-            if (isArray(source)) {
-                return source.at(-1);
-            } else if (source instanceof Collection) {
-                return source.final();
-            } else {
-                let final: T | undefined = undefined;
-                for (const item of source) {
-                    final = item;
-                }
-                return final;
-            }
+            return externalFinal(source)?.value;
         };
     }
 
@@ -2192,6 +2251,20 @@ export class SortedItmod<T> extends Itmod<T> {
     }
 
     // TODO skip and skipFinal
+
+    public get first() {
+        const self = this;
+        return function first() {
+            return self.min(self.comparator);
+        };
+    }
+
+    public get final() {
+        const self = this;
+        return function final() {
+            return self.max(self.comparator);
+        };
+    }
 }
 
 /**
@@ -2228,6 +2301,19 @@ export class MappedItmod<T, R> extends Itmod<R> {
         this.mapping = mapping;
         this.original = original;
         this.config = { indexOffset };
+    }
+
+    public get map() {
+        const self = this;
+        return function map<R2>(
+            mapping: (item: R, index: number) => R2
+        ): MappedItmod<T, R2> {
+            return new MappedItmod(
+                self.original,
+                (item, index) => mapping(self.mapping(item, index), index),
+                self.config
+            );
+        };
     }
 
     public get take() {
@@ -2427,6 +2513,18 @@ export class MappedItmod<T, R> extends Itmod<R> {
             } else {
                 return new MappedItmod(self.original.shuffle(), self.mapping);
             }
+        };
+    }
+
+    public get final() {
+        const self = this;
+        const externalFinal = final;
+        return function final() {
+            const source = self.original.getSource();
+            const result = externalFinal(source);
+
+            if (result === undefined) return undefined;
+            return self.mapping(result.value, result.index);
         };
     }
 }
@@ -2835,3 +2933,139 @@ function groupByRecursive<
             : (group) => groupByRecursive(group, rest, groupSelector)
     );
 }
+
+function final<T>(
+    source: Iterable<T>
+): { value: T; index: number } | undefined {
+    if (isArray(source)) {
+        if (source.length === 0) return undefined;
+
+        const i = source.length - 1;
+        return { value: source[i] as T, index: i };
+    } else if (source instanceof Collection) {
+        const size = source.size;
+
+        if (size === 0) return undefined;
+        return { value: source.final() as T, index: size - 1 };
+    } else {
+        let final: T | undefined = undefined;
+        let i = -1;
+        for (const item of source) {
+            i++;
+            final = item;
+        }
+
+        if (i === -1) return undefined;
+        return { value: final as T, index: i };
+    }
+}
+
+/**
+ * @returns An {@link Iterable} over a range of integers from start to end, incremented by step.
+ * @param start The first number in the sequence.
+ * @param end Where the range ends (exclusive).
+ * @param step How much larger each number in the sequence is from the previous number.
+ */
+function externalRange(
+    start: bigint,
+    end: bigint,
+    step: bigint
+): Iterable<bigint>;
+
+/**
+ * @returns An {@link Iterable} over a range of integers from start to end, incremented by 1 or -1 if end is less than start.
+ * @param start The first number in the sequence.
+ * @param end Where the range ends (exclusive).
+ */
+function externalRange(start: bigint, end: bigint): Iterable<bigint>;
+
+/**
+ * @returns An {@link Iterable} over a range of integers from 0 to end, incremented by 1.
+ * @param end Where the range ends (exclusive).
+ */
+function externalRange(end: bigint): Iterable<bigint>;
+
+/**
+ * @returns An {@link Iterable} over a range of numbers from start to end, incremented by step.
+ * @param start The first number in the sequence.
+ * @param end Where the range ends (exclusive).
+ * @param step How much larger each number in the sequence is from the previous number.
+ */
+function externalRange(
+    start: number | bigint,
+    end: number | bigint,
+    step: number | bigint
+): Iterable<number>;
+
+/**
+ * @returns An {@link Iterable} over a range of numbers from start to end, incremented by 1 or -1 if end isless than start.
+ * @param start The first number in the sequence.
+ * @param end Where the range ends (exclusive).
+ */
+function externalRange(
+    start: number | bigint,
+    end: number | bigint
+): Iterable<number>;
+
+/**
+ * @returns An {@link Iterable} over a range of numbers from 0 to end, incremented by 1.
+ * @param end Where the range ends (exclusive).
+ */
+function externalRange(end: number | bigint): Iterable<number>;
+
+function externalRange(
+    _startOrEnd: number | bigint,
+    _end?: number | bigint,
+    _step?: number | bigint
+): any {
+    const useNumber =
+        typeof _startOrEnd === "number" ||
+        typeof _end === "number" ||
+        typeof _step === "number";
+
+    const ZERO = useNumber ? 0 : (0n as any);
+    const ONE = useNumber ? 1 : (1n as any);
+
+    let start: any;
+    let end: any;
+    let step: any;
+    if (_step !== undefined) {
+        start = _startOrEnd;
+        end = _end;
+        step = _step;
+    } else if (_end !== undefined) {
+        start = _startOrEnd;
+        end = _end;
+        step = ONE;
+    } else {
+        start = ZERO;
+        end = _startOrEnd;
+        step = ONE;
+    }
+
+    if (useNumber) {
+        start = Number(start);
+        end = Number(end);
+        step = Number(step);
+    }
+
+    if (step === ZERO) throw new Error("arg3 must not be zero");
+
+    if (step < ZERO && start < end) return [];
+    if (step > ZERO && start > end) return [];
+
+    const test = step > ZERO ? (i: any) => i < end : (i: any) => i > end;
+
+    return {
+        *[Symbol.iterator]() {
+            for (let i = start; test(i); i += step) yield i;
+        },
+    };
+}
+
+export const from = Itmod.from;
+export const fromObject = Itmod.fromObject;
+export const range = Itmod.range;
+export const of = Itmod.of;
+export const generate = Itmod.generate;
+export const empty = Itmod.empty;
