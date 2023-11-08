@@ -438,6 +438,9 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * Filters out undefined.
+     */
     public get defined() {
         const self = this;
         return function defined(): Itmod<T extends undefined ? never : T> {
@@ -445,6 +448,9 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * Filters out null.
+     */
     public get notNull() {
         const self = this;
         return function notNull(): Itmod<T extends null ? never : T> {
@@ -452,10 +458,15 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * Filters out null and undefined.
+     */
     public get notNullish() {
         const self = this;
-        return function notNullish() {
-            return self.notNull().defined();
+        return function notNullish(): Itmod<
+            T extends null ? never : T extends undefined ? never : T
+        > {
+            return self.filter((item) => item !== null && item !== undefined);
         };
     }
 
