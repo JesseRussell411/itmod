@@ -692,13 +692,11 @@ export default class Itmod<T> implements Iterable<T> {
             finalize: (result: any, count: number) => any = identity
         ) {
             const source = self.getSource();
-            const iterator = source[Symbol.iterator]();
 
             let accumulator = initialValue;
             let i = 0;
-            let next: IteratorResult<T>;
-            while (!(next = iterator.next()).done) {
-                accumulator = reducer(accumulator, next.value, i);
+            for (const item of source) {
+                accumulator = reducer(accumulator, item, i);
                 i++;
             }
             const count = i;
@@ -2867,6 +2865,17 @@ function indexBy<T, K>(
 
 function groupBy<T, K>(
     items: Iterable<T>,
+    keySelector: (item: T, index: number) => K
+): Map<K, T[]>;
+
+function groupBy<T, K, G>(
+    items: Iterable<T>,
+    keySelector: (item: T, index: number) => K,
+    groupSelector: (group: T[], key: K) => G
+): Map<K, G>;
+
+function groupBy<T, K>(
+    items: Iterable<T>,
     keySelector: (item: T, index: number) => K,
     groupSelector: (group: T[], key: K) => any = identity
 ): Map<K, any> {
@@ -3081,6 +3090,6 @@ export const generate = Itmod.generate;
 
 export const of = Itmod.of;
 
-export const empty = Itmod.empty;
-
 export const range = Itmod.range;
+
+export const empty = Itmod.empty;
