@@ -1,7 +1,8 @@
+import AsyncItmod from "./AsyncItmod";
 import CircularBuffer from "./collections/CircularBuffer";
 import Collection from "./collections/Collection";
 import SortedSequence from "./collections/SortedSequence";
-import { asArray, asIterable, asIterator, asSet } from "./collections/as";
+import { asArray, asIterable, asSet } from "./collections/as";
 import {
     isArray,
     isArrayAsWritable,
@@ -12,6 +13,7 @@ import {
 import {
     emptyIterable,
     nonIteratedCountOrUndefined,
+    wrapIterator,
 } from "./collections/iterables";
 import { toArray, toSet } from "./collections/to";
 import { identity, resultOf, returns } from "./functional/functions";
@@ -45,7 +47,7 @@ import { ReturnTypes } from "./types/functions";
 
 // TODO remove all uses of any, unless absolutely necessary
 
-// design note: the purpose of every function being an accessor (get) is to bind "this" on each method without making them fields and making every instance of Itmod take loads of memory just to exist.
+// design note: the purpose of every method being an accessor (get) is to bind "this" on each method without making them fields and making every instance of Itmod take loads of memory just to exist.
 
 /**
  * Information about an {@link Itmod} and its Iterable.
@@ -93,28 +95,43 @@ export default class Itmod<T> implements Iterable<T> {
         this.getSource = getSource;
     }
 
+    public static get from() {
+        /**
+         * @returns An {@link Itmod} over the given source or the result of the given function.
+         *
+         * Use {@link Itmod.fromIterator} for {@link Iterator}s.
+         */
+        return function from<T>(
+            source: Iterable<T> | (() => Iterable<T>),
+            properties: ItmodProperties<T> = {}
+        ): Itmod<T> {
+            if (source instanceof Function) {
+                return new Itmod({ expensive: true, ...properties }, source);
+            } else if (source instanceof Itmod) {
+                return source;
+            } else {
+                return new Itmod({ ...properties }, returns(source));
+            }
+        };
+    }
+
     /**
-     * @returns An {@link Itmod} over the given source or the result of the given function.
+     * @returns An {@link Itmod} over the given iterator or the iterator returned by the given function.
+     *
+     * Use {@link Itmod.from} for {@link Iterable}s.
+     *
+     * This function will continue an IterableIterator instead of invoking its `[Symbol.iterator]` method which, in the case of generators, will only produce a non-empty iterator once. This allows the partial iteration of an iterator, which can then be continued by another call to {@link Itmod.fromIterator}.
      */
-    public static from<T>(
-        source:
-            | Iterable<T>
-            | Iterator<T>
-            | (() => Iterable<T>)
-            | (() => Iterator<T>),
+    public static fromIterator<T>(
+        source: Iterator<T> | (() => Iterator<T>),
         properties: ItmodProperties<T> = {}
     ): Itmod<T> {
         if (source instanceof Function) {
-            return new Itmod(
-                { ...properties, expensive: properties.expensive ?? true },
-                () => {
-                    return asIterable(source());
-                }
+            return new Itmod({ expensive: true, ...properties }, () =>
+                wrapIterator(source())
             );
-        } else if (source instanceof Itmod) {
-            return source;
         } else {
-            return new Itmod(properties, returns(asIterable(source)));
+            return new Itmod({ ...properties }, returns(wrapIterator(source)));
         }
     }
 
@@ -134,7 +151,7 @@ export default class Itmod<T> implements Iterable<T> {
 
     // TODO improve type. I'm going to bed
     /**
-     * @returns A Itmod over the entries of the given object.
+     * @returns An Itmod over the entries of the given object.
      */
     public static fromObject<
         K extends keyof any,
@@ -177,7 +194,7 @@ export default class Itmod<T> implements Iterable<T> {
         return from(() => {
             const instance = resultOf(object);
 
-            return empty()
+            return Itmod.empty()
                 .if(includeStringKeys, (self) =>
                     self.concat(Object.getOwnPropertyNames(instance))
                 )
@@ -211,7 +228,7 @@ export default class Itmod<T> implements Iterable<T> {
         requireNonNegative(requireIntegerOrInfinity(count));
 
         if (generatorOrItem === identity) {
-            return range(count) as unknown as Itmod<T>;
+            return Itmod.range(count) as unknown as Itmod<T>;
         }
 
         if (generatorOrItem instanceof Function) {
@@ -298,73 +315,97 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
-    /**
-     * @returns An {@link Itmod} over a range of integers from start to end, incremented by step.
-     * @param start The first number in the sequence.
-     * @param end Where the range ends (exclusive).
-     * @param step How much larger each number in the sequence is from the previous number.
-     */
-    public static range(
-        start: bigint,
-        end: bigint,
-        step: bigint
-    ): Itmod<bigint>;
-    /**
-     * @returns An {@link Itmod} over a range of integers from start to end, incremented by 1 or -1 if end is less than start.
-     * @param start The first number in the sequence.
-     * @param end Where the range ends (exclusive).
-     */
-    public static range(start: bigint, end: bigint): Itmod<bigint>;
-    /**
-     * @returns An {@link Itmod} over a range of integers from 0 to end, incremented by 1.
-     * @param end Where the range ends (exclusive).
-     */
-    public static range(end: bigint): Itmod<bigint>;
+    public static get range(): {
+        /**
+         * @returns An {@link Itmod} over a range of integers from start to end, incremented by step.
+         * @param start The first number in the sequence.
+         * @param end Where the range ends (exclusive).
+         * @param step How much larger each number in the sequence is from the previous number.
+         */
+        (start: bigint, end: bigint, step: bigint): Itmod<bigint>;
+        /**
+         * @returns An {@link Itmod} over a range of integers from start to end, incremented by 1 or -1 if end is less than start.
+         * @param start The first number in the sequence.
+         * @param end Where the range ends (exclusive).
+         */
+        (start: bigint, end: bigint): Itmod<bigint>;
+        /**
+         * @returns An {@link Itmod} over a range of integers from 0 to end, incremented by 1.
+         * @param end Where the range ends (exclusive).
+         */
+        (end: bigint): Itmod<bigint>;
 
-    /**
-     * @returns An {@link Itmod} over a range of numbers from start to end, incremented by step.
-     * @param start The first number in the sequence.
-     * @param end Where the range ends (exclusive).
-     * @param step How much larger each number in the sequence is from the previous number.
-     */
-    public static range(
-        start: number | bigint,
-        end: number | bigint,
-        step: number | bigint
-    ): Itmod<number>;
-    /**
-     * @returns An {@link Itmod} over a range of numbers from start to end, incremented by 1 or -1 if end is less than start.
-     * @param start The first number in the sequence.
-     * @param end Where the range ends (exclusive).
-     */
-    public static range(
-        start: number | bigint,
-        end: number | bigint
-    ): Itmod<number>;
-    /**
-     * @returns An {@link Itmod} over a range of numbers from 0 to end, incremented by 1.
-     * @param end Where the range ends (exclusive).
-     */
-    public static range(end: number | bigint): Itmod<number>;
+        /**
+         * @returns An {@link Itmod} over a range of numbers from start to end, incremented by step.
+         * @param start The first number in the sequence.
+         * @param end Where the range ends (exclusive).
+         * @param step How much larger each number in the sequence is from the previous number.
+         */
+        (
+            start: number | bigint,
+            end: number | bigint,
+            step: number | bigint
+        ): Itmod<number>;
+        /**
+         * @returns An {@link Itmod} over a range of numbers from start to end, incremented by 1 or -1 if end is less than start.
+         * @param start The first number in the sequence.
+         * @param end Where the range ends (exclusive).
+         */
+        (start: number | bigint, end: number | bigint): Itmod<number>;
+        /**
+         * @returns An {@link Itmod} over a range of numbers from 0 to end, incremented by 1.
+         * @param end Where the range ends (exclusive).
+         */
+        (end: number | bigint): Itmod<number>;
+    } {
+        return function range(
+            _startOrEnd: number | bigint,
+            _end?: number | bigint,
+            _step?: number | bigint
+        ): Itmod<number> | Itmod<bigint> {
+            const useNumber =
+                typeof _startOrEnd === "number" ||
+                typeof _end === "number" ||
+                typeof _step === "number";
 
-    public static range(
-        _startOrEnd: number | bigint,
-        _end?: number | bigint,
-        _step?: number | bigint
-    ): Itmod<number> | Itmod<bigint> {
-        if (_end === undefined) {
-            const end = _startOrEnd;
-            return new Itmod({}, returns(externalRange(end)));
-        } else if (_step === undefined) {
-            const start = _startOrEnd;
-            const end = _end;
-            return new Itmod({}, returns(externalRange(start, end)));
-        } else {
-            const start = _startOrEnd;
-            const end = _end;
-            const step = _step;
-            return new Itmod({}, returns(externalRange(start, end, step)));
-        }
+            const ZERO = useNumber ? 0 : (0n as any);
+            const ONE = useNumber ? 1 : (1n as any);
+
+            let start: any;
+            let end: any;
+            let step: any;
+            if (_step !== undefined) {
+                start = _startOrEnd;
+                end = _end;
+                step = _step;
+            } else if (_end !== undefined) {
+                start = _startOrEnd;
+                end = _end;
+                step = ONE;
+            } else {
+                start = ZERO;
+                end = _startOrEnd;
+                step = ONE;
+            }
+
+            if (useNumber) {
+                start = Number(start);
+                end = Number(end);
+                step = Number(step);
+            }
+
+            if (step === ZERO) throw new Error("arg3 must not be zero");
+
+            if (step < ZERO && start < end) return Itmod.empty<any>();
+            if (step > ZERO && start > end) return Itmod.empty<any>();
+
+            const test =
+                step > ZERO ? (i: any) => i < end : (i: any) => i > end;
+
+            return new Itmod({}, function* () {
+                for (let i = start; test(i); i += step) yield i;
+            });
+        } as any;
     }
 
     /**
@@ -1099,7 +1140,7 @@ export default class Itmod<T> implements Iterable<T> {
                     size = array.length;
                 }
 
-                const indexesToTake = range(size)
+                const indexesToTake = Itmod.range(size)
                     .shuffle(getRandomInt)
                     .take(count)
                     .asSet();
@@ -1248,7 +1289,7 @@ export default class Itmod<T> implements Iterable<T> {
                     size = array.length;
                 }
 
-                const indexesToSkip = range(size)
+                const indexesToSkip = Itmod.range(size)
                     .shuffle(getRandomInt)
                     .take(count)
                     .asSet();
@@ -1947,6 +1988,15 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    public get toAsyncItmod() {
+        const self = this;
+        return function toAsyncItmod() {
+            return new AsyncItmod({}, async function* () {
+                yield* self;
+            });
+        };
+    }
+
     /**
      * If the {@link Iterable} is an {@link Array}, returns that {@link Array} as readonly; otherwise, copies all the items into an {@link Array} and returns that.
      */
@@ -2273,6 +2323,14 @@ export class SortedItmod<T> extends Itmod<T> {
         };
     }
 
+    public get count() {
+        return this.original.count;
+    }
+
+    public get nonIteratedCountOrUndefined() {
+        return this.original.nonIteratedCountOrUndefined;
+    }
+
     public get take() {
         const self = this;
         return function take(count: number | bigint) {
@@ -2351,6 +2409,14 @@ export class MappedItmod<T, R> extends Itmod<R> {
                 self.config
             );
         };
+    }
+
+    public get count() {
+        return this.original.count;
+    }
+
+    public get nonIteratedCountOrUndefined() {
+        return this.original.nonIteratedCountOrUndefined;
     }
 
     public get take() {
@@ -2586,6 +2652,14 @@ export class ReversedItmod<T> extends Itmod<T> {
             };
         });
         this.original = original;
+    }
+
+    public get count() {
+        return this.original.count;
+    }
+
+    public get nonIteratedCountOrUndefined() {
+        return this.original.nonIteratedCountOrUndefined;
     }
 
     public get reverse() {
@@ -2997,112 +3071,16 @@ function final<T>(
     }
 }
 
-/**
- * @returns An {@link Iterable} over a range of integers from start to end, incremented by step.
- * @param start The first number in the sequence.
- * @param end Where the range ends (exclusive).
- * @param step How much larger each number in the sequence is from the previous number.
- */
-function externalRange(
-    start: bigint,
-    end: bigint,
-    step: bigint
-): Iterable<bigint>;
-
-/**
- * @returns An {@link Iterable} over a range of integers from start to end, incremented by 1 or -1 if end is less than start.
- * @param start The first number in the sequence.
- * @param end Where the range ends (exclusive).
- */
-function externalRange(start: bigint, end: bigint): Iterable<bigint>;
-
-/**
- * @returns An {@link Iterable} over a range of integers from 0 to end, incremented by 1.
- * @param end Where the range ends (exclusive).
- */
-function externalRange(end: bigint): Iterable<bigint>;
-
-/**
- * @returns An {@link Iterable} over a range of numbers from start to end, incremented by step.
- * @param start The first number in the sequence.
- * @param end Where the range ends (exclusive).
- * @param step How much larger each number in the sequence is from the previous number.
- */
-function externalRange(
-    start: number | bigint,
-    end: number | bigint,
-    step: number | bigint
-): Iterable<number>;
-
-/**
- * @returns An {@link Iterable} over a range of numbers from start to end, incremented by 1 or -1 if end isless than start.
- * @param start The first number in the sequence.
- * @param end Where the range ends (exclusive).
- */
-function externalRange(
-    start: number | bigint,
-    end: number | bigint
-): Iterable<number>;
-
-/**
- * @returns An {@link Iterable} over a range of numbers from 0 to end, incremented by 1.
- * @param end Where the range ends (exclusive).
- */
-function externalRange(end: number | bigint): Iterable<number>;
-
-function externalRange(
-    _startOrEnd: number | bigint,
-    _end?: number | bigint,
-    _step?: number | bigint
-): any {
-    const useNumber =
-        typeof _startOrEnd === "number" ||
-        typeof _end === "number" ||
-        typeof _step === "number";
-
-    const ZERO = useNumber ? 0 : (0n as any);
-    const ONE = useNumber ? 1 : (1n as any);
-
-    let start: any;
-    let end: any;
-    let step: any;
-    if (_step !== undefined) {
-        start = _startOrEnd;
-        end = _end;
-        step = _step;
-    } else if (_end !== undefined) {
-        start = _startOrEnd;
-        end = _end;
-        step = ONE;
-    } else {
-        start = ZERO;
-        end = _startOrEnd;
-        step = ONE;
-    }
-
-    if (useNumber) {
-        start = Number(start);
-        end = Number(end);
-        step = Number(step);
-    }
-
-    if (step === ZERO) throw new Error("arg3 must not be zero");
-
-    if (step < ZERO && start < end) return [];
-    if (step > ZERO && start > end) return [];
-
-    const test = step > ZERO ? (i: any) => i < end : (i: any) => i > end;
-
-    return {
-        *[Symbol.iterator]() {
-            for (let i = start; test(i); i += step) yield i;
-        },
-    };
-}
-
 export const from = Itmod.from;
+
+export const fromIterator = Itmod.fromIterator;
+
 export const fromObject = Itmod.fromObject;
-export const range = Itmod.range;
-export const of = Itmod.of;
+
 export const generate = Itmod.generate;
+
+export const of = Itmod.of;
+
 export const empty = Itmod.empty;
+
+export const range = Itmod.range;
