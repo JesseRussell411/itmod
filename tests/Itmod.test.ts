@@ -1,5 +1,15 @@
-import Itmod from "../src/Itmod";
+import Itmod, {
+    empty,
+    from,
+    fromIterator,
+    fromObject,
+    generate,
+    of,
+    range,
+} from "../src/Itmod";
+import CircularBuffer from "../src/collections/CircularBuffer";
 import LinkedList from "../src/collections/LinkedList";
+import { identity } from "../src/functional/functions";
 import { breakSignal } from "../src/signals";
 import { autoComparator } from "../src/sorting";
 
@@ -812,8 +822,21 @@ describe("nonIteratedCountOrUndefined", () => {
     });
     test("from generator", () => {
         const itmod = Itmod.from(function* () {
-            throw new Error(); // shouldn't be iterated
+            throw new Error(
+                "source was iterated by nonIteratedCountOrUndefined"
+            );
         });
+        expect(itmod.nonIteratedCountOrUndefined()).toBe(undefined);
+    });
+    test("from expensive", () => {
+        const itmod = Itmod.from(
+            () => {
+                throw new Error(
+                    "expensive getSource was run by nonIteratedCountOrUndefined"
+                );
+            },
+            { expensive: true }
+        );
         expect(itmod.nonIteratedCountOrUndefined()).toBe(undefined);
     });
 });
@@ -1709,8 +1732,144 @@ describe("sequenceEqual", () => {
     });
 });
 
+describe("includes", () => {
+    const fromIterable = Itmod.from<number>(function* () {
+        yield 1;
+        yield 2;
+        yield 3;
+    });
+    const fromSet = Itmod.from<number>(new Set([1, 2, 3]));
+    describe("does include", () => {
+        test("iterable", () => {
+            expect(fromIterable.includes(1)).toBe(true);
+            expect(fromIterable.includes(2)).toBe(true);
+            expect(fromIterable.includes(3)).toBe(true);
+        });
+        test("set", () => {
+            expect(fromSet.includes(1)).toBe(true);
+            expect(fromSet.includes(2)).toBe(true);
+            expect(fromSet.includes(3)).toBe(true);
+        });
+    });
+
+    describe("doesn't include", () => {
+        test("iterable", () => {
+            expect(fromIterable.includes(0)).toBe(false);
+            expect(fromIterable.includes(4)).toBe(false);
+        });
+        test("set", () => {
+            expect(fromSet.includes(0)).toBe(false);
+            expect(fromSet.includes(4)).toBe(false);
+        });
+    });
+});
+
+describe("some", () => {
+    test("outputs true", () => {
+        expect(of(0, 1, 2.5, 3).some((n, i) => n !== i)).toBe(true);
+        expect(of(0, 1, 2, 3.5).some((n, i) => n !== i)).toBe(true);
+        expect(of(0, 1, 2, 3.5).some((n, i) => n === i)).toBe(true);
+    });
+    test("outputs false", () => {
+        expect(of(0, 1, 2, 3).some((n, i) => n !== i)).toBe(false);
+        expect(of(0.7, 1.1, 2.1, 3.5).some((n, i) => n === i)).toBe(false);
+    });
+});
+
+describe("none", () => {
+    test("outputs true", () => {
+        expect(of(0, 1, 2, 3).none((n, i) => n !== i)).toBe(true);
+        expect(of(0.7, 1.1, 2.1, 3.5).none((n, i) => n === i)).toBe(true);
+    });
+    test("outputs false", () => {
+        expect(of(0, 1, 2.5, 3).none((n, i) => n !== i)).toBe(false);
+        expect(of(0, 1, 2, 3.5).none((n, i) => n !== i)).toBe(false);
+        expect(of(0, 1, 2, 3.5).none((n, i) => n === i)).toBe(false);
+    });
+});
+
+describe("every", () => {
+    test("outputs true", () => {
+        expect(of(0, 1, 2, 3).every((n, i) => n === i)).toBe(true);
+        expect(of(0.7, 1.1, 2.1, 3.5).every((n, i) => n !== i)).toBe(true);
+    });
+    test("outputs false", () => {
+        expect(of(0, 1.2, 2.4, 3).every((n, i) => n === i)).toBe(false);
+        expect(of(0.7, 1.1, 2, 3.5).every((n, i) => n !== i)).toBe(false);
+    });
+});
+
+describe("distinct", () => {
+    test("already distinct results in the same thing", () => {
+        expect(of(0, 1, 2, 3).distinct().sequenceEquals([0, 1, 2, 3])).toBe(
+            true
+        );
+    });
+    test("non distinct results in something different that is distinct", () => {
+        expect(
+            of(0, 1, 0, 2, 3, 1).distinct().sequenceEquals([0, 1, 2, 3])
+        ).toBe(true);
+    });
+});
+
+describe.each([
+    { name: "from string", itmod: from("abcdefg") },
+    { name: "from char array", itmod: from(["x", "y", "z"]) },
+    { name: "numbers", itmod: range(10) },
+])("makeString", ({ name, itmod }) => {
+    test("no args -- " + name, () => {
+        expect(itmod.makeString()).toBe(itmod.toArray().join(""));
+    });
+    test('makeString("*") -- ' + name, () => {
+        expect(itmod.makeString("*")).toBe(itmod.toArray().join("*"));
+    });
+    test('makeString("@", "*") -- ' + name, () => {
+        expect(itmod.makeString("@", "*")).toBe(
+            "@" + itmod.toArray().join("*")
+        );
+    });
+    test('makeString("@", "*", "@") -- ' + name, () => {
+        expect(itmod.makeString("@", "*", "@")).toBe(
+            "@" + itmod.toArray().join("*") + "@"
+        );
+    });
+    test('makeString("", "*", "@") -- ' + name, () => {
+        expect(itmod.makeString("", "*", "@")).toBe(
+            itmod.toArray().join("*") + "@"
+        );
+    });
+    test('makeString("@", "", "@") -- ' + name, () => {
+        expect(itmod.makeString("@", "", "@")).toBe(
+            "@" + itmod.toArray().join("") + "@"
+        );
+    });
+    test('makeString("@", "*", "") -- ' + name, () => {
+        expect(itmod.makeString("@", "*", "")).toBe(
+            "@" + itmod.toArray().join("*")
+        );
+    });
+    test('makeString("", "", "@") -- ' + name, () => {
+        expect(itmod.makeString("", "", "@")).toBe(
+            itmod.toArray().join("") + "@"
+        );
+    });
+    test('makeString("", "*", "") -- ' + name, () => {
+        expect(itmod.makeString("", "*", "")).toBe(itmod.toArray().join("*"));
+    });
+    test('makeString("@", "", "") -- ' + name, () => {
+        expect(itmod.makeString("@", "", "")).toBe(
+            "@" + itmod.toArray().join("")
+        );
+    });
+    test('makeString("", "", "") -- ' + name, () => {
+        expect(itmod.makeString("", "", "")).toBe(itmod.toArray().join(""));
+    });
+});
+
+// TODO tests for defined, notNull, zip, including, flat, split, partitionBySize, append, prepend, min without count and max without count, groupJoin, join, innerGroupJoin, innerJoin, union, intersection, difference, replaceWhenEmpty
 // TODO test for every method in itmod and its children
-// TODO tests for includes, some, every, distinct, defined, notNull, zip, including, makeString, flat, split, partitionBySize, append, prepend, min without count and max without count, groupJoin, join, innerGroupJoin, innerJoin, union, intersection, difference, replaceWhenEmpty
+
+// TODO big list of Itmods made in special ways to test
 
 /*
  * TODO list of special cases to test
@@ -1730,3 +1889,371 @@ describe("sequenceEqual", () => {
  * TODO find other special cases to test
  *
  */
+
+// really bad implementation of consistency tests
+// TODO do better
+
+// did reveal a bug in partitionBySize though
+
+/** bunch of itmods for doing consistency tests */
+const itmods = {
+    empty: () =>
+        [
+            () => empty(),
+            () => of(),
+            () => from([]),
+            () => from(function* () {}),
+            () => fromIterator(function* () {}),
+            () => from((function* () {})()),
+            () => fromIterator([][Symbol.iterator]()),
+            () => fromObject({}),
+            () => generate(0, (i) => i + 1),
+            () => new Itmod({ fresh: true }, () => []),
+            () => new Itmod({ fresh: true, expensive: true }, () => []),
+            ...from(itmods.oneThroughTen()).map(
+                (itmod) => () => itmod().take(0)
+            ),
+            ...from(itmods.oneThroughTen()).map(
+                (itmod) => () => itmod().filter(() => false)
+            ),
+            ...from(itmods.oneThroughTen()).map(
+                (itmod) => () => itmod().takeWhile(() => false)
+            ),
+            ...from(itmods.oneThroughTen()).map(
+                (itmod) => () => itmod().takeFinal(0)
+            ),
+            ...from(itmods.oneThroughTen()).map(
+                (itmod) => () => itmod().min(0)
+            ),
+            ...from(itmods.oneThroughTen()).map(
+                (itmod) => () => itmod().max(0)
+            ),
+        ] as (() => Itmod<number>)[],
+    oneThroughTen: () =>
+        [
+            () =>
+                from(() => {
+                    const cb = new CircularBuffer(10);
+                    for (const n of range(1, 11)) cb.push(n);
+                    return cb;
+                }),
+            () => from(new LinkedList(range(1, 11))),
+            () => range(1, 100).shuffle().min(10),
+            () => range(-100, 11).shuffle().max(10),
+            () => range(1, 100).shuffle().collapse().min(10),
+            () => range(-100, 11).shuffle().collapse().max(10),
+            () => of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
+            () => from([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+            () => from(() => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+            () =>
+                from(function* () {
+                    for (let i = 1; i <= 10; i++) yield i;
+                }),
+            () =>
+                fromIterator(function* () {
+                    for (let i = 1; i <= 10; i++) yield i;
+                }),
+            () =>
+                from(
+                    (function* () {
+                        for (let i = 1; i <= 10; i++) yield i;
+                    })()
+                ),
+            () =>
+                fromIterator(
+                    (function* () {
+                        for (let i = 1; i <= 10; i++) yield i;
+                    })()
+                ),
+            () =>
+                fromIterator(
+                    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10][Symbol.iterator]()
+                ),
+            () => range(1, 11),
+            () => generate(10, (i) => i + 1),
+            () => range(1, 11).shuffle().sort(),
+        ] as (() => Itmod<number>)[],
+    one: () => [
+        () => of(1),
+        () => from([1]),
+        () =>
+            from(function* () {
+                yield 1;
+            }),
+        () =>
+            fromIterator(function* () {
+                yield 1;
+            }),
+        () =>
+            from(
+                (function* () {
+                    yield 1;
+                })()
+            ),
+        () =>
+            fromIterator(
+                (function* () {
+                    yield 1;
+                })()
+            ),
+        ...itmods.oneThroughTen().map((itmod) => () => itmod().take(1)),
+        ...itmods.oneThroughTen().map((itmod) => () => itmod().skipFinal(9)),
+    ],
+};
+
+const numberItmodToItmodTests: ((itmod: Itmod<number>) => Itmod<any>)[] = [
+    (itmod) => itmod.map(identity),
+    (itmod) => itmod.map((t) => t),
+    (itmod) => itmod.append(1),
+    (itmod) => itmod.collapse(),
+    (itmod) => itmod.concat([1, 2]),
+    (itmod) => itmod.copyWithin(1, 0, 1),
+    (itmod) => itmod.distinct(),
+    (itmod) => itmod.filter((n) => n > 5),
+    (itmod) => itmod.filter((n) => n >= 5),
+    (itmod) => itmod.filter((n) => n < 5),
+    (itmod) => itmod.filter((n) => n === 5),
+    (itmod) => itmod.flat(),
+    (itmod) => itmod.groupBy((n) => n % 2),
+    (itmod) => itmod.groupBy((n) => n % 2 === 0),
+    (itmod) => itmod.indexBy((n) => n % 2),
+    (itmod) => itmod.indexBy((n) => n % 2 === 0),
+    (itmod) => itmod.indexBy((n) => n % 4),
+    (itmod) => itmod.max(10),
+    (itmod) => itmod.max(20),
+    (itmod) => itmod.min(2),
+    (itmod) => itmod.min(1),
+    (itmod) => itmod.min(0),
+    (itmod) => itmod.max(20),
+    (itmod) => itmod.max(10),
+    (itmod) => itmod.max(2),
+    (itmod) => itmod.max(1),
+    (itmod) => itmod.max(0),
+    (itmod) => itmod.map((n) => n * 2),
+    (itmod) => itmod.map((n, i) => n + i),
+    (itmod) => itmod.map((n, i) => n * i),
+    (itmod) => itmod.concat([null, undefined]).notNull(),
+    (itmod) => itmod.concat([null, undefined]).defined(),
+    (itmod) => itmod.concat([null, undefined]).notNull().defined(),
+    (itmod) => itmod.concat([null, undefined]).notNullish(),
+    (itmod) => itmod.union([1, 2, 6, 8, 10, 11, 13, 14]),
+    (itmod) => itmod.union([1, 2, 6]),
+    (itmod) => itmod.union([11111, 2, 6]),
+    (itmod) => itmod.union([1, 1, 1, 1, 1, 2, 6]),
+    (itmod) => itmod.partitionBySize(1),
+    (itmod) => itmod.partitionBySize(2),
+    (itmod) => itmod.partitionBySize(5),
+    (itmod) => itmod.partitionBySize(10),
+    (itmod) => itmod.partitionBySize(11),
+    (itmod) => itmod.partitionBySize(9),
+    (itmod) => itmod.partitionBySize(Infinity),
+    (itmod) => itmod.preConcat([1, 2, 3]),
+    (itmod) => itmod.append(1),
+    (itmod) => itmod.prepend(1),
+    (itmod) => itmod.repeat(2),
+    (itmod) => itmod.repeat(1),
+    (itmod) => itmod.repeat(0),
+    (itmod) => itmod.repeat(-1),
+    (itmod) => itmod.repeat(-2),
+    (itmod) => itmod.replaceEmptyWith([1, 2, 3]),
+    (itmod) => itmod.take(1),
+    (itmod) => itmod.take(0),
+    (itmod) => itmod.take(5),
+    (itmod) => itmod.take(10),
+    (itmod) => itmod.take(11),
+    (itmod) => itmod.take(Infinity),
+    (itmod) => itmod.take(9),
+    (itmod) => itmod.skip(0),
+    (itmod) => itmod.skip(9),
+    (itmod) => itmod.skip(10),
+    (itmod) => itmod.skip(Infinity),
+    (itmod) => itmod.skip(11),
+    (itmod) => itmod.skipFinal(0),
+    (itmod) => itmod.skipFinal(1),
+    (itmod) => itmod.skipFinal(5),
+    (itmod) => itmod.skipFinal(9),
+    (itmod) => itmod.skipFinal(10),
+    (itmod) => itmod.skipFinal(11),
+    (itmod) => itmod.skipFinal(Infinity),
+    (itmod) => itmod.skipEveryNth(1),
+    (itmod) => itmod.skipEveryNth(2),
+    (itmod) => itmod.skipEveryNth(3),
+    (itmod) => itmod.skipEveryNth(5),
+    (itmod) => itmod.skipEveryNth(9),
+    (itmod) => itmod.skipEveryNth(10),
+    (itmod) => itmod.skipEveryNth(11),
+    (itmod) => itmod.skipEveryNth(Infinity),
+    (itmod) => itmod.skipWhile((n) => n < 2),
+    (itmod) => itmod.skipWhile((n) => n > 2),
+    (itmod) => itmod.skipWhile((n) => n <= 2),
+    (itmod) => itmod.skipWhile((n) => n >= 2),
+    (itmod) => itmod.takeFinal(0),
+    (itmod) => itmod.takeFinal(1),
+    (itmod) => itmod.takeFinal(2),
+    (itmod) => itmod.takeFinal(5),
+    (itmod) => itmod.takeFinal(9),
+    (itmod) => itmod.takeFinal(10),
+    (itmod) => itmod.takeFinal(11),
+    (itmod) => itmod.takeFinal(Infinity),
+    (itmod) => itmod.takeEveryNth(1),
+    (itmod) => itmod.takeEveryNth(2),
+    (itmod) => itmod.takeEveryNth(3),
+    (itmod) => itmod.takeEveryNth(5),
+    (itmod) => itmod.takeEveryNth(9),
+    (itmod) => itmod.takeEveryNth(10),
+    (itmod) => itmod.takeEveryNth(11),
+    (itmod) => itmod.takeEveryNth(Infinity),
+    (itmod) => itmod.takeWhile((n) => n < 2),
+    (itmod) => itmod.takeWhile((n) => n > 2),
+    (itmod) => itmod.takeWhile((n) => n >= 2),
+    (itmod) => itmod.takeWhile((n) => n <= 2),
+    (itmod) => itmod.reverse(),
+    (itmod) => itmod.shuffle().sort(),
+    (itmods) => itmods.partitionBySize(2).flat(),
+    (itmods) => itmods.preConcat([1, 2, 3]),
+    (itmods) => itmods.prepend(1),
+    (itmods) => itmods.collapse(),
+    (itmod) =>
+        itmod.zip([-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12], {
+            loose: true,
+        }),
+    (itmod) =>
+        itmod.zip([-1, -2, -3, -4, -5, -6, -7, -8, -9, -10], { loose: true }),
+    (itmod) => itmod.zip([-1, -2, -3, -4, -5, -6, -7, -8, -9], { loose: true }),
+    (itmod) =>
+        itmod.zip([-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12], {
+            loose: false,
+        }),
+    (itmod) =>
+        itmod.zip([-1, -2, -3, -4, -5, -6, -7, -8, -9, -10], { loose: false }),
+    (itmod) =>
+        itmod.zip([-1, -2, -3, -4, -5, -6, -7, -8, -9], { loose: false }),
+];
+
+const numberItmodToAnyTests: ((itmod: Itmod<number>) => unknown)[] = [
+    (itmod) => itmod.every((n) => n >= 1),
+    (itmod) => itmod.every((n) => n > 1),
+    (itmod) => itmod.every((n) => n === 1),
+    (itmod) => itmod.every((n) => n === 0),
+    (itmod) => itmod.some((n) => n >= 1),
+    (itmod) => itmod.some((n) => n > 1),
+    (itmod) => itmod.some((n) => n === 1),
+    (itmod) => itmod.some((n) => n === 0),
+    (itmod) => itmod.none((n) => n >= 1),
+    (itmod) => itmod.none((n) => n > 1),
+    (itmod) => itmod.none((n) => n === 1),
+    (itmod) => itmod.none((n) => n === 0),
+    (itmod) => itmod.first(),
+    (itmod) => itmod.final(),
+    (itmod) => itmod.fold(-5, (a, b) => a + b),
+    (itmod) => itmod.fold(0, (a, b) => a + b),
+    (itmod) => itmod.fold(5, (a, b) => a + b),
+    (itmod) =>
+        itmod.fold(
+            -5,
+            (a, b) => a + b,
+            (t, c) => t / c
+        ),
+    (itmod) =>
+        itmod.fold(
+            0,
+            (a, b) => a + b,
+            (t, c) => t / c
+        ),
+    (itmod) =>
+        itmod.fold(
+            5,
+            (a, b) => a + b,
+            (t, c) => t / c
+        ),
+
+    (itmod) => itmod.fold(5, Math.max),
+    (itmod) => itmod.fold(5, Math.max, (max, count) => max + count),
+    (itmod) => itmod.reduce<number>((a, b) => a + b),
+    (itmod) =>
+        itmod.reduce(
+            (a, b) => a + b,
+            (t, c) => t / c
+        ),
+    (itmod) => itmod.reduce(Math.max),
+    (itmod) => itmod.reduce(Math.max, (max, count) => max + count),
+    (itmod) => [...itmod.getSource()],
+    (itmod) => itmod.includes(0),
+    (itmod) => itmod.includes(1),
+    (itmod) => itmod.includes(4),
+    (itmod) => itmod.includes(9),
+    (itmod) => itmod.includes(10),
+    (itmod) => itmod.includes(11),
+    (itmod) => itmod.toArray(),
+    (itmod) => itmod.max(),
+    (itmod) => itmod.min(),
+    (itmod) => itmod.sequenceEquals([]),
+    (itmod) => itmod.sequenceEquals([1, 2, 3, 4, 5]),
+    (itmod) => itmod.sequenceEquals([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+    (itmod) => itmod.count(),
+    (itmod) => itmod.groupBy((n) => n % 2 === 0).toObject(),
+    (itmod) => itmod.indexBy((n) => n % 2).toObject(),
+    (itmod) => itmod.indexBy((n) => n % 3).toObject(),
+    (itmod) => itmod.indexBy((n) => n % 4).toObject(),
+    (itmod) => itmod.makeString(),
+    (itmod) => itmod.makeString(","),
+    (itmod) => itmod.makeString("[", ","),
+    (itmod) => itmod.makeString("[", ",", "]"),
+    (itmod) => itmod.makeString("", ",", "]"),
+    (itmod) => itmod.makeString("", "", "]"),
+    (itmod) => itmod.makeString("", "", ""),
+    ...from(numberItmodToItmodTests).map(
+        (t) => (itmod: Itmod<number>) => t(itmod).toArray()
+    ),
+    ...from(numberItmodToItmodTests).map((t) => (itmod: Itmod<number>) => [
+        ...t(itmod),
+    ]),
+];
+
+describe("consistency tests", () => {
+    test("empty", () => {
+        for (const t of numberItmodToAnyTests) {
+            let output: string | undefined = undefined;
+            for (const empty of itmods.empty()) {
+                if (output === undefined) {
+                    output = JSON.stringify(t(empty()));
+                } else {
+                    expect(
+                        JSON.stringify(t(empty())),
+                        t.toString() + " | " + empty.toString()
+                    ).toBe(output);
+                }
+            }
+        }
+    });
+    test("one", () => {
+        for (const t of numberItmodToAnyTests) {
+            let output: string | undefined = undefined;
+            for (const empty of itmods.one()) {
+                if (output === undefined) {
+                    output = JSON.stringify(t(empty()));
+                } else {
+                    expect(
+                        JSON.stringify(t(empty())),
+                        t.toString() + " | " + empty.toString()
+                    ).toBe(output);
+                }
+            }
+        }
+    });
+    test("one through ten", () => {
+        for (const t of numberItmodToAnyTests) {
+            let output: string | undefined = undefined;
+            for (const empty of itmods.oneThroughTen()) {
+                if (output === undefined) {
+                    output = JSON.stringify(t(empty()));
+                } else {
+                    expect(
+                        JSON.stringify(t(empty())),
+                        t.toString() + " | " + empty.toString()
+                    ).toBe(output);
+                }
+            }
+        }
+    });
+});

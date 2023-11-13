@@ -290,14 +290,24 @@ export default class CircularBuffer<T> extends Collection<T> {
     }
 
     /**
-     * Appends the element to the end of the buffer (which would be removed by {@link pop}).
-     * Removing the first element if the buffer is full.
+     * Appends the elements to the end of the buffer (which would be removed by {@link pop}).
+     * Removing elements from the start if the buffer is full.
      */
-    public push(...items: readonly T[]): void {
+    public push(...elements: readonly T[]): void {
         if (this.maxSize === 0) return;
-        for (const item of items) {
+        for (const item of elements) {
             this.incrementFinalIndex();
             this.data[this.finalIndex] = item;
+        }
+    }
+
+    /**
+     * Appends the elements from the Iterable to the end of the buffer (white would be removed by {@link pop}).
+     * Removing elements from the start if the buffer is full.
+     */
+    public pushMany(items: Iterable<T>): void {
+        for (const item of items) {
+            this.push(item);
         }
     }
 
@@ -409,7 +419,7 @@ export default class CircularBuffer<T> extends Collection<T> {
     private get beginningLength(): number {
         return this.maxSize - this.offset;
     }
-    
+
     /**
      * The length of the end section of the data if the data {@link isSplit}. Nonsense otherwise.
      * ```

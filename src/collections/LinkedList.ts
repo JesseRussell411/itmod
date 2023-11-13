@@ -60,11 +60,8 @@ export default class LinkedList<T> extends Collection<T> {
     }
 
     public *[Symbol.iterator](): Iterator<T> {
-        let current = this.head;
-
-        while (current !== undefined) {
-            yield current.value;
-            current = current.next;
+        for (const node of this.nodes()) {
+            yield node.value;
         }
     }
 
@@ -364,15 +361,24 @@ export default class LinkedList<T> extends Collection<T> {
     }
 
     /**
-     * Replaces the value in the node with the given newValue as long as the node belongs to this list.
+     * Sets the value on the given node.
+     *
+     * @param node The node to set the value of or the index of the node. Time complexity is O(index) if given an index.
+     * @param value The value.
      *
      * @returns Whether the value was set.
      */
-    public reValue(node: LinkedListNode<T>, newValue: T): boolean {
+    public set(node: LinkedListNode<T> | number, value: T): boolean {
+        if (typeof node === "number") {
+            const nodeAtIndex = this.nodeAt(node);
+            if (nodeAtIndex === undefined) return false;
+            return this.set(nodeAtIndex, value);
+        }
+
         const _node = node as Node<T>;
         if (_node.linkedList !== this) return false;
 
-        _node.value = newValue;
+        _node.value = value;
         return true;
     }
 
@@ -434,10 +440,11 @@ export default class LinkedList<T> extends Collection<T> {
     public clear(): void {
         let current = this._head;
         while (current !== undefined) {
+            const next = current.next;
             delete current.next;
             delete current.previous;
             delete current.linkedList;
-            current = current.next;
+            current = next;
         }
 
         delete this._head;

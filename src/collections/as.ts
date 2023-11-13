@@ -1,5 +1,6 @@
+import Itmod from "../Itmod";
 import { isIterable } from "./is";
-import { emptyIterator, wrapIterator } from "./iterables";
+import { wrapIterator } from "./iterables";
 import { toArray, toSet } from "./to";
 
 /**
@@ -10,6 +11,8 @@ import { toArray, toSet } from "./to";
 export function asArray<T>(collection: Iterable<T> | undefined): readonly T[] {
     if (Array.isArray(collection)) {
         return collection;
+    } else if (collection instanceof Itmod) {
+        return collection.asArray();
     } else {
         return toArray(collection);
     }
@@ -23,6 +26,8 @@ export function asArray<T>(collection: Iterable<T> | undefined): readonly T[] {
 export function asSet<T>(collection: Iterable<T> | undefined): ReadonlySet<T> {
     if (collection instanceof Set) {
         return collection;
+    } else if (collection instanceof Itmod) {
+        return collection.asSet();
     } else {
         return toSet(collection);
     }

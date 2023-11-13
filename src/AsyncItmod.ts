@@ -63,14 +63,16 @@ export default class AsyncItmod<T> implements AsyncIterable<T> {
 
     public get filter() {
         const self = this;
-        return async function* filter<R extends T = T>(
+        return function filter<R extends T = T>(
             condition: (item: T, index: number) => boolean | Promise<boolean>
-        ) {
-            let i = 0;
-            for await (const item of self) {
-                if (await condition(item, i)) yield item;
-                i++;
-            }
+        ): AsyncItmod<Awaited<R>> {
+            return new AsyncItmod({}, async function* () {
+                let i = 0;
+                for await (const item of self) {
+                    if (await condition(item, i)) yield item as R;
+                    i++;
+                }
+            });
         };
     }
 
@@ -108,7 +110,7 @@ export default class AsyncItmod<T> implements AsyncIterable<T> {
 /*
 
 
-methods to have (basically nothing that involves copying the whole thing into memory before you can get the first item (like reverse) (unless that memory is the desired result like with toArray or makestring, if that memory is just a middle-man type of this, that's different.), since you should just use toItmod for that)
+methods to have (basically nothing that involves copying the whole thing into memory before you can get the first item (like reverse) (unless that memory is the desired result like with toArray or makestring, if that memory is just a middle-man type of thing, that's different.), since you should just use toItmod for that)
 forEach
 map
 flat

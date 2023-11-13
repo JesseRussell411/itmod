@@ -25,14 +25,14 @@ export function emptyIterator<T = never>(): Iterator<T> {
 const _emptyIterator: Iterator<any> = {
     // this is so that no one can replace the next method
     get next() {
-        return doneIteratorResultResult;
+        return doneIteratorResult;
     },
 };
 
 /**
  * @returns The result of a complete iterator.
  */
-export function doneIteratorResultResult<T>(): IteratorResult<T> & {
+export function doneIteratorResult<T>(): IteratorResult<T> & {
     done: true;
 } {
     return _doneIteratorResult;
@@ -65,8 +65,10 @@ export function cachingIterable<T>(
                 } else {
                     const next = iterator.next();
                     if (next.done) return;
+
                     const value = next.value;
                     cache.push(value);
+
                     yield value;
                 }
                 i++;
@@ -81,9 +83,33 @@ export function cachingIterable<T>(
  * @returns The size of the {@link Iterable} or undefined if the size couldn't be determined without iterating it.
  */
 export function nonIteratedCountOrUndefined(
-    iterable: Iterable<any>
+    iterable: Iterable<unknown>
 ): number | undefined {
-    if (Array.isArray(iterable)) return iterable.length;
+    if (Array.isArray(iterable)) {
+        return iterable.length;
+    }
+
+    function isFrontendHTMLCollection(
+        iterable: unknown
+    ): iterable is { readonly length: number } {
+        if (typeof window === "undefined" || window == null) return false;
+
+        for (const name of ["NodeList", "HTMLCollection"]) {
+            const collectionType = (window as any)[name];
+            if (
+                typeof collectionType === "function" &&
+                iterable instanceof collectionType
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    if (isFrontendHTMLCollection(iterable)) {
+        return iterable.length;
+    }
 
     if (
         iterable instanceof Set ||
