@@ -35,6 +35,12 @@ console.log("mean:", mean);
 
 `Itmod.fromObject({one: 1, two: 2, three: 3}).append(["four", 4]).toObject()` => `{one: 1, two: 2, three: 3, four: 4}`
 
+### Takes any Iterable (or function that returns an Iterable).
+### Writen in modern-style typescript.
+### Infinite sequences.
+### high level optimizations.
+### declarative programming.
+
 # Itmod's methods
 
 ### forEach
