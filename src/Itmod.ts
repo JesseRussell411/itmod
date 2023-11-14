@@ -12,6 +12,7 @@ import {
     isSetAsWritable,
 } from "./collections/is";
 import {
+    cachingIterable,
     emptyIterable,
     nonIteratedCountOrUndefined,
     wrapIterator,
@@ -192,7 +193,7 @@ export default class Itmod<T> implements Iterable<T> {
             V
         ]
     > {
-        return from(() => {
+        return new Itmod({ expensive: object instanceof Function }, () => {
             const instance = resultOf(object);
 
             return Itmod.empty()
@@ -249,8 +250,11 @@ export default class Itmod<T> implements Iterable<T> {
         }
     }
 
-    // crazy control flow concoctions
-
+    /**
+     * Applies the given body function to the itmod, returning the result if the condition is true. Otherwise, the given else_ function is applied and the result of that is returned instead. else_ defaults to identity, which will do nothing and return the itmod unchanged.
+     * @param body What to do if the condition is true.
+     * @param else_ what to do if the condition is false. Defaults to {@link identity}.
+     */
     public get if(): <R, E = this>(
         condition: boolean,
         body: (self: this) => R,
@@ -270,6 +274,9 @@ export default class Itmod<T> implements Iterable<T> {
         } as any;
     }
 
+    /**
+     * Calls the given function with the itmod as the argument.
+     */
     public get applyTo(): <R>(body: (self: this) => R) => R {
         const self = this;
         return function applyTo<R>(body: (itmod: Itmod<T>) => R) {
@@ -515,6 +522,9 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * Combines the items with the items from the given iterable by interleaving them.
+     */
     public get zip() {
         const self = this;
         return function zip<O>(
@@ -772,7 +782,7 @@ export default class Itmod<T> implements Iterable<T> {
 
                 return (function* () {
                     yield item;
-                    yield* self;
+                    yield* source;
                 })();
             });
         };
@@ -804,15 +814,15 @@ export default class Itmod<T> implements Iterable<T> {
             if (times === 0) return Itmod.empty();
 
             return new Itmod({}, function* () {
-                const array = self.asArray();
+                const cached = cachingIterable(self);
 
                 if (times === Infinity) {
                     while (true) {
-                        yield* array;
+                        yield* cached;
                     }
                 } else {
                     for (let i = zeroLike(times); i < times; i++) {
-                        yield* array;
+                        yield* cached;
                     }
                 }
             });
@@ -898,16 +908,17 @@ export default class Itmod<T> implements Iterable<T> {
             ] = args;
 
             return new Itmod({}, function* () {
+                const source = getDeepSource(self.getSource());
                 if (id === identity && otherId === identity) {
                     const toAdd = new Set<T | O>(other);
-                    for (const item of self) {
+                    for (const item of source) {
                         yield item;
                         toAdd.delete(item);
                     }
                     yield* toAdd;
                 } else {
                     const toAdd = from(other).indexBy(otherId).toMap();
-                    for (const item of self) {
+                    for (const item of source) {
                         yield item;
                         toAdd.delete(id(item));
                     }
@@ -1022,16 +1033,17 @@ export default class Itmod<T> implements Iterable<T> {
             ] = args;
 
             return new Itmod({}, function* () {
+                const source = getDeepSource(self.getSource());
                 if (id === identity && otherId === identity) {
                     const set = asSet<T | O>(other);
-                    for (const item of self) {
+                    for (const item of source) {
                         if (!set.has(item)) {
                             yield item;
                         }
                     }
                 } else {
                     const set = Itmod.from(other).map(otherId).asSet();
-                    for (const item of self) {
+                    for (const item of source) {
                         if (!set.has(id(item))) {
                             yield item;
                         }
@@ -1104,6 +1116,23 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * Takes every item who's index is divisible by the given number (including the item at index 0, the first item).
+     *
+     * For example:
+     *
+     * `takeEveryNth(2)` would return the items at index 0, 2, 4, 6, 8, etc.
+     *
+     * `takeEveryNth(4)` would return the items at index 0, 4, 8, 12, etc.
+     *
+     * `takeEveryNth(1)` would return all items
+     *
+     * `takeEveryNth(Infinity)` would return no items
+     *
+     * `takeEveryNth(0)` would throw an error.
+     *
+     * `takeEveryNth(-1)` would throw an error.
+     */
     public get takeEveryNth() {
         const self = this;
         return function takeEveryNth(n: number | bigint): Itmod<T> {
@@ -1128,6 +1157,9 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * Takes items as long as the given condition returns true for the item and its index, stopping when the condition returns false, not taking the item that made the condition return false.
+     */
     public get takeWhile() {
         const self = this;
         return function takeWhile(
@@ -1159,6 +1191,11 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * Takes the given count of items in order at random. The items taken are evenly distributed across the length of the items. Do not attempt on an infinite sequence; this will cause an infinite loop.
+     * @param count How many items to take.
+     * @param getRandomInt A function that returns a random integer that is greater than or equal to 0 and less than upperBound: 0 <= n < upperBound. Defaults to {@link Math.random}, which is not guarantied to be cryptographically secure.
+     */
     public get takeRandom() {
         const self = this;
         return function takeRandom(
@@ -1262,6 +1299,23 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * Skips every item who's index is divisible by the given number (including the item at index 0, the first item).
+     *
+     * For example:
+     *
+     * `skipEveryNth(2)` would return the items at index 1, 3, 5, 7, 9, etc.
+     *
+     * `skipEveryNth(4)` would return the items at index 1, 2, 3, 5, 6, 7, 9, etc.
+     *
+     * `skipEveryNth(1)` would return no items
+     *
+     * `skipEveryNth(Infinity)` would return all items
+     *
+     * `skipEveryNth(0)` would throw an error.
+     *
+     * `skipEveryNth(-1)` would throw an error.
+     */
     public get skipEveryNth() {
         const self = this;
         return function skipEveryNth(n: number | bigint): Itmod<T> {
@@ -1287,6 +1341,9 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * Takes items as long as the given condition returns true for the item and its index, stopping when the condition returns false, not taking the item that made the condition return false.
+     */
     public get skipWhile() {
         const self = this;
         return function skipWhile(
@@ -1312,6 +1369,11 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * Skips the given count of items at random. The items skipped are evenly distributed across the length of the items. Do not attempt on an infinite sequence; this will cause an infinite loop.
+     * @param count How many items to skip.
+     * @param getRandomInt A function that returns a random integer that is greater than or equal to 0 and less than upperBound: 0 <= n < upperBound. Defaults to {@link Math.random}, which is not guarantied to be cryptographically secure.
+     */
     public get skipRandom() {
         const self = this;
         return function skipRandom(
@@ -1369,7 +1431,11 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
-    /** Alias for for {@link Itmod.map}`((item, i) => [i, item])` */
+    /**
+     * Alias for for {@link Itmod.map}`((item, i) => [i, item])`
+     *
+     * Maps each element to a tuple containing its index and itself.
+     */
     public get indexed() {
         const self = this;
         return function indexed(): Itmod<[index: number, item: T]> {
@@ -1398,6 +1464,9 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * @returns Whether the given condition returns true for at least one element and its index.
+     */
     public get some() {
         const self = this;
         return function some(
@@ -1414,6 +1483,7 @@ export default class Itmod<T> implements Iterable<T> {
 
     /**
      * Alias for `!this.some(condition)`
+     * @returns Whether the given condition returns false for every element and its index.
      */
     public get none() {
         const self = this;
@@ -1424,6 +1494,9 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
+    /**
+     * @returns Whether the given condition returns true for every element and its index.
+     */
     public get every() {
         const self = this;
         return function every(
@@ -1635,6 +1708,7 @@ export default class Itmod<T> implements Iterable<T> {
 
             const selfSize = self.nonIteratedCountOrUndefined();
 
+            /** optimization for when it is known that there will only be one partition at most. */
             if (
                 size === Infinity ||
                 (selfSize !== undefined && selfSize <= size)
@@ -3194,6 +3268,8 @@ function final<T>(
  * If the given iterable is an Itmod, return's it's source, unless it's source is also an Itmod, then it's source's source is returned. Etc.
  *
  * Not always necessary but can be useful.
+ *
+ * *NOTE* may be expensive as one of the nested sources might be expensive. No good way to tell.
  */
 function getDeepSource<T>(source: Iterable<T>): Iterable<T> {
     while (source instanceof Itmod) {

@@ -1895,6 +1895,8 @@ describe.each([
 
 // did reveal a bug in partitionBySize though
 
+// and a bug in prepend which was causing it to iterate the source twice, which broke on generators which can only be iterated once.
+
 /** bunch of itmods for doing consistency tests */
 const itmods = {
     empty: () =>
@@ -1938,6 +1940,7 @@ const itmods = {
                     return cb;
                 }),
             () => from(new LinkedList(range(1, 11))),
+            () => from(() => new LinkedList(range(1, 11)), { fresh: true }),
             () => range(1, 100).shuffle().min(10),
             () => range(-100, 11).shuffle().max(10),
             () => range(1, 100).shuffle().collapse().min(10),
@@ -1945,6 +1948,16 @@ const itmods = {
             () => of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10),
             () => from([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
             () => from(() => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]),
+            () => from(() => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], { fresh: true }),
+            () =>
+                from(() => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], {
+                    expensive: true,
+                }),
+            () =>
+                from(() => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], {
+                    fresh: true,
+                    expensive: true,
+                }),
             () =>
                 from(function* () {
                     for (let i = 1; i <= 10; i++) yield i;
@@ -1998,6 +2011,7 @@ const itmods = {
             ),
         ...itmods.oneThroughTen().map((itmod) => () => itmod().take(1)),
         ...itmods.oneThroughTen().map((itmod) => () => itmod().skipFinal(9)),
+        ...itmods.oneThroughTen().map((itmod) => () => itmod().min(1)),
     ],
 };
 
@@ -2128,6 +2142,16 @@ const numberItmodToItmodTests: ((itmod: Itmod<number>) => Itmod<any>)[] = [
         itmod.zip([-1, -2, -3, -4, -5, -6, -7, -8, -9, -10], { loose: false }),
     (itmod) =>
         itmod.zip([-1, -2, -3, -4, -5, -6, -7, -8, -9], { loose: false }),
+    (itmod) =>
+        itmod.groupJoin(
+            range(100),
+            (s) => s.toString().charAt(0),
+            (o) => o.toString().charAt(o.toString().length - 1),
+            (s, o) =>
+                of(s)
+                    .concat(o)
+                    .reduce((a, b) => a * b)
+        ),
 ];
 
 const numberItmodToAnyTests: ((itmod: Itmod<number>) => unknown)[] = [
@@ -2236,6 +2260,25 @@ describe("consistency tests", () => {
                     expect(
                         JSON.stringify(t(empty())),
                         t.toString() + " | " + empty.toString()
+                    ).toBe(output);
+                }
+            }
+        }
+        for (const t of numberItmodToItmodTests) {
+            let output: string | undefined = undefined;
+            for (const one of itmods.one()) {
+                if (output === undefined) {
+                    output = JSON.stringify(t(one()).toArray());
+                } else {
+                    expect(
+                        JSON.stringify(t(one()).toArray()),
+                        t.toString() +
+                            " | " +
+                            one.toString() +
+                            " | " +
+                            one().makeString(", ") +
+                            " | " +
+                            t(one()).makeString(", ")
                     ).toBe(output);
                 }
             }
