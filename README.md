@@ -25,6 +25,8 @@ console.log("mean:", mean);
 
 ## Some nice features.
 
+### Lazy execution, above all else.
+
 ### Sorting with default behavior that makes sense.
 
 `Itmod.of(1,10, 2, 20, 7, 90, 3).sort().toArray()` => `[1, 2, 3, 7, 10, 20, 90]`
