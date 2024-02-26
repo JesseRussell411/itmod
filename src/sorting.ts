@@ -262,7 +262,7 @@ export function reverseComparator<T>(comparator: Comparator<T>): Comparator<T> {
     if (fromCache !== undefined) return fromCache;
 
     const reversed = (a: T, b: T) => comparator(b, a);
-    
+
     // store original in cache so that the comparator can be efficiently un-reversed later
     reversedComparatorCache.set(reversed, comparator);
 

@@ -1,4 +1,4 @@
-import { requireNonNegative, requireSafeInteger } from "../require";
+import { requireNonNegative, requireSafeInteger } from "../checks";
 import Collection from "./Collection";
 
 /**
@@ -192,7 +192,7 @@ export default class CircularBuffer<T> extends Collection<T> {
             ) {
                 // SOMEHOW this is faster than using any build in library functions
                 for (let i = 0; i < length; i++) {
-                    dst[dstStart++] = src[srcStart++]!;
+                    dst[dstStart + i] = src[srcStart + i]!;
                 }
 
                 // I think the interpreter knows what I'm trying to do

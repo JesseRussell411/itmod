@@ -31,6 +31,7 @@ export default abstract class Collection<T> implements Iterable<T> {
      * @returns The {@link Collection}'s contents copied into an {@link Array}.
      */
     public toArray(): T[] {
+        // this is just the default behavior. child classes can override this if there is a more efficient way.
         return [...this];
     }
 
@@ -60,6 +61,7 @@ export default abstract class Collection<T> implements Iterable<T> {
      * @returns The final element in the collection given by its iterator.
      */
     public final(): T | undefined {
+        // just the default. child classes can override this
         let final: T | undefined = undefined;
         for (const item of this) final = item;
         return final;

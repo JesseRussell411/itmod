@@ -1,17 +1,18 @@
 import Itmod from "./Itmod";
 import { BreakSignal, breakSignal } from "./signals";
+import { AwaitableIterable } from "./types/iterable";
 
 export type AsyncItmodProperties<_> = Readonly<Partial<{ expensive: boolean }>>;
 
 export default class AsyncItmod<T> implements AsyncIterable<T> {
     public readonly getSource: () =>
-        | Promise<AsyncIterable<T>>
-        | AsyncIterable<T>;
+        | Promise<AwaitableIterable<T>>
+        | AwaitableIterable<T>;
     public readonly properties: AsyncItmodProperties<T>;
 
     public constructor(
         properties: AsyncItmodProperties<T>,
-        getSource: () => Promise<AsyncIterable<T>> | AsyncIterable<T>
+        getSource: () => Promise<AwaitableIterable<T>> | AwaitableIterable<T>
     ) {
         this.properties = properties;
         this.getSource = getSource;
@@ -75,6 +76,13 @@ export default class AsyncItmod<T> implements AsyncIterable<T> {
             });
         };
     }
+
+    // public get flat() {
+    //     const self = this;
+    //     return function flat(): AsyncItmod<Awaited<T> extends AwaitableIterable<T>infer SubT> ? SubT : T> {
+
+    //     }
+    // }
 
     public get toArray() {
         const self = this;

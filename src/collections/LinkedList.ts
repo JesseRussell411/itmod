@@ -1,4 +1,4 @@
-import { requireSafeInteger } from "../require";
+import { requireSafeInteger } from "../checks";
 import { Writable } from "../types/object";
 import Collection from "./Collection";
 

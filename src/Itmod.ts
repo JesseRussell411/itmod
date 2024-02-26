@@ -25,7 +25,7 @@ import {
     requireNonNegative,
     requireSafeInteger,
     requireSafeIntegerOrInfinity,
-} from "./require";
+} from "./checks";
 import { BreakSignal, breakSignal } from "./signals";
 import {
     Comparator,
@@ -41,7 +41,26 @@ import {
 import MapEntryLike from "./types/MapEntryLike";
 import { ReturnTypes } from "./types/functions";
 
-// TODO make ALL methods for every class in this entire library use accessors to bind "this"
+// I stumbled upon a video from the early 2000's: https://www.youtube.com/watch?v=fG8GgqfYZkw&t=1615s
+// It's Anders Hejlsberg, creator of C# and Typescript, demoing LINQ, which at the time, was a radical idea in mainstream programming.
+// The video is very in-formal and almost "cozy". It exudes the feeling of a smart guy showing off something cool they built.
+// To me, LINQ is a piece of unassuming software that hides a deep complexity, which is what I wanted to mimic here.
+// On the surface, LINQ is a collection of query function like map (called Select in LINQ) or filter (Where),
+// and you'd be forgiven for thinking that was all there is to it. But just imagine the possible optimizations
+// behind the scenes. When you use Contains to check if some IEnumerable contains some value, is it actually
+// enumerating the whole thing, or does the particular data structure have it's own way of checking,
+// with a better time complexity? It's up to the technology to decide, you just tell it what you want.
+
+// That's the complexity I wanted to have in Itmod. You tell it what you want, and it tries its best to accomplish that as efficiently as it can.
+// If you run: from(foo).sort().toArray(), Itmod will copy the contents of foo into an array, sort it, and return it.
+// It's smart enough not to create another array in the toArray function, because it knows that sort returns an array,
+// which is safe to modify and give away, so it doesn't need to copy that array into a new one, it can just return it.
+
+// That is "what this is for." Because that is fun. I find it fun. It's fun to write software that is smart.
+// It's fun to write software that is complex. It's fun to create the pit of success, and allow the potential user to
+// accidentally do the best thing.
+
+// TODO make ALL methods for every class in this entire library use accessors to bind "this" for FUNCTIONAL programming and more predictable behavior.
 // TODO unit tests
 
 // TODO takeSparse, skipSparse, partition by count
@@ -855,20 +874,22 @@ export default class Itmod<T> implements Iterable<T> {
     public get distinct() {
         const self = this;
         return function distinct(id: (item: T) => any = identity) {
-            return new Itmod({}, function* () {
+            return new Itmod(self.properties, () => {
                 const source = self.getSource();
 
-                if (id === identity && isSet(source)) yield* source;
+                if (id === identity && isSet(source)) return source;
 
-                const returned = new Set<T>();
-                for (const item of source) {
-                    const itemId = id(item);
+                return (function* () {
+                    const returned = new Set<T>();
+                    for (const item of source) {
+                        const itemId = id(item);
 
-                    if (!returned.has(itemId)) {
-                        yield item;
-                        returned.add(itemId);
+                        if (!returned.has(itemId)) {
+                            yield item;
+                            returned.add(itemId);
+                        }
                     }
-                }
+                })();
             });
         };
     }
@@ -930,7 +951,7 @@ export default class Itmod<T> implements Iterable<T> {
 
     /**
      * Performs the set operation, intersection.
-     * @returns The items found in this Itmod and in the given iterable.
+     * @returns The items found in both this Itmod and the given iterable.
      */
     public get intersection(): {
         (
@@ -1104,7 +1125,13 @@ export default class Itmod<T> implements Iterable<T> {
                 if (count === Infinity) return source;
                 if (isZero(count)) return emptyIterable();
 
-                // TODO break out skip for an optimization here
+                const sourceSize = nonIteratedCountOrUndefined(source);
+
+                if (sourceSize !== undefined) {
+                    return from(source).if(sourceSize > count, (itmod) =>
+                        itmod.skip(sourceSize - Number(count))
+                    );
+                }
 
                 const buffer = new CircularBuffer<T>(Number(count));
                 for (const value of source) {
@@ -1285,9 +1312,17 @@ export default class Itmod<T> implements Iterable<T> {
                 const source = self.getSource();
                 if (count === Infinity) return emptyIterable();
                 if (isZero(count)) return source;
-                return (function* () {
-                    // TODO break out take for an optimization here
 
+                const sourceSize = nonIteratedCountOrUndefined(source);
+                if (sourceSize !== undefined) {
+                    if (sourceSize > count) {
+                        return from(source).take(sourceSize - Number(count));
+                    } else {
+                        return emptyIterable();
+                    }
+                }
+
+                return (function* () {
                     const buffer = new CircularBuffer<T>(Number(count));
 
                     for (const item of source) {
@@ -2755,21 +2790,19 @@ export class MappedItmod<T, R> extends Itmod<R> {
 export class ReversedItmod<T> extends Itmod<T> {
     protected readonly original: Itmod<T>;
     public constructor(original: Itmod<T>) {
-        super({}, () => {
+        super({ expensive: true }, () => {
             const source = original.getSource();
 
             if (source instanceof Collection) {
                 return source.reversed();
             }
 
-            return {
-                *[Symbol.iterator]() {
-                    const array = asArray(source);
-                    for (let i = array.length - 1; i >= 0; i--) {
-                        yield array[i] as T;
-                    }
-                },
-            };
+            return (function* () {
+                const array = asArray(source);
+                for (let i = array.length - 1; i >= 0; i--) {
+                    yield array[i] as T;
+                }
+            })();
         });
         this.original = original;
     }
@@ -2848,6 +2881,9 @@ export class GroupedItmod<
         this.groupMapping = groupMapping;
     }
 
+    /**
+     * Applies a mapping to each group, keeping the key the same.
+     */
     public get mapGroups() {
         const self = this;
         return function mapGroup<G>(mapping: (group: Group) => G) {
@@ -3027,60 +3063,6 @@ function split<T, O>(
     };
 }
 
-function indexBy<T, K>(
-    items: Iterable<T>,
-    keySelector: (item: T, index: number) => K
-): Map<K, T> {
-    const indexedItems = new Map<K, T>();
-
-    let i = 0;
-    for (const item of items) {
-        const key = keySelector(item, i);
-        indexedItems.set(key, item);
-    }
-
-    return indexedItems;
-}
-
-function groupBy<T, K>(
-    items: Iterable<T>,
-    keySelector: (item: T, index: number) => K
-): Map<K, T[]>;
-
-function groupBy<T, K, G>(
-    items: Iterable<T>,
-    keySelector: (item: T, index: number) => K,
-    groupSelector: (group: T[], key: K) => G
-): Map<K, G>;
-
-function groupBy<T, K>(
-    items: Iterable<T>,
-    keySelector: (item: T, index: number) => K,
-    groupSelector: (group: T[], key: K) => any = identity
-): Map<K, any> {
-    const groups = new Map<K, any>();
-
-    let i = 0;
-    for (const item of items) {
-        const key = keySelector(item, i);
-        const group = groups.get(key);
-        if (group === undefined) {
-            groups.set(key, [item]);
-        } else {
-            group.push(item);
-        }
-        i++;
-    }
-
-    if (groupSelector !== identity) {
-        for (const [key, group] of groups) {
-            groups.set(key, groupSelector(group, key));
-        }
-    }
-
-    return groups;
-}
-
 function groupJoinByKey<O, I, K, R>(
     left: Iterable<O>,
     right: Iterable<I>,
@@ -3187,6 +3169,60 @@ function joinByComparison<A, B, R>(
     };
 }
 
+function indexBy<T, K>(
+    items: Iterable<T>,
+    keySelector: (item: T, index: number) => K
+): Map<K, T> {
+    const indexedItems = new Map<K, T>();
+
+    let i = 0;
+    for (const item of items) {
+        const key = keySelector(item, i);
+        indexedItems.set(key, item);
+    }
+
+    return indexedItems;
+}
+
+function groupBy<T, K>(
+    items: Iterable<T>,
+    keySelector: (item: T, index: number) => K
+): Map<K, T[]>;
+
+function groupBy<T, K, G>(
+    items: Iterable<T>,
+    keySelector: (item: T, index: number) => K,
+    groupSelector: (group: T[], key: K) => G
+): Map<K, G>;
+
+function groupBy<T, K>(
+    items: Iterable<T>,
+    keySelector: (item: T, index: number) => K,
+    groupSelector: (group: T[], key: K) => any = identity
+): Map<K, any> {
+    const groups = new Map<K, any>();
+
+    let i = 0;
+    for (const item of items) {
+        const key = keySelector(item, i);
+        const group = groups.get(key);
+        if (group === undefined) {
+            groups.set(key, [item]);
+        } else {
+            group.push(item);
+        }
+        i++;
+    }
+
+    if (groupSelector !== identity) {
+        for (const [key, group] of groups) {
+            groups.set(key, groupSelector(group, key));
+        }
+    }
+
+    return groups;
+}
+
 export type GroupByRecursiveResult<
     Keys extends readonly any[],
     Group
@@ -3269,13 +3305,134 @@ function final<T>(
  *
  * Not always necessary but can be useful.
  *
- * *NOTE* may be expensive as one of the nested sources might be expensive. No good way to tell.
+ * *NOTE* assume to be expensive as one of the nested sources might be expensive. No good way to tell ahead of time.
  */
 function getDeepSource<T>(source: Iterable<T>): Iterable<T> {
     while (source instanceof Itmod) {
         source = source.getSource();
     }
     return source;
+}
+
+/**
+ * Out of two iterables, tries to pick the best one to use as a set, and the best one to use as a list.
+ * @param prioritize Which to prioritize if neither is a set. Defaults to "smaller".
+ * This default is under the assumption that the list would be iterated in full regardless,
+ * which is what would need to be done to copy it into a set,
+ * so copying it into a set ahead of time wouldn't help and just use more memory than necessary.
+ */
+function pickTheSet<Left, Right>(
+    left: Iterable<Left>,
+    right: Iterable<Right>,
+    prioritize:
+        | "prioritizeLeft"
+        | "prioritizeRight"
+        | "prioritizeSmaller"
+        | "prioritizeLarger" = "prioritizeSmaller"
+): "left" | "right" {
+    const aIsSet = isSet(left);
+    const bIsSet = isSet(right);
+
+    if (aIsSet && bIsSet) {
+        if (left.size > right.size) {
+            return "left";
+        } else {
+            return "right";
+        }
+    } else if (aIsSet) {
+        return "left";
+    } else if (bIsSet) {
+        return "right";
+    } else {
+        // neither is already a set
+        if (prioritize === "prioritizeLeft") {
+            return "left";
+        }
+        if (prioritize === "prioritizeRight") {
+            return "right";
+        }
+        const sizeA = nonIteratedCountOrUndefined(left);
+        const sizeB = nonIteratedCountOrUndefined(right);
+
+        if (sizeA !== undefined && sizeB !== undefined) {
+            if (
+                prioritize === "prioritizeLarger"
+                    ? sizeA > sizeB
+                    : sizeA < sizeB
+            ) {
+                return "left";
+            } else {
+                return "right";
+            }
+        } else if (sizeA !== undefined) {
+            return "left";
+        } else if (sizeB !== undefined) {
+            return "right";
+        } else {
+            return "left";
+        }
+    }
+}
+
+function innerJoin<Left, Right, OnLeft, OnRight>(
+    left: Iterable<Left>,
+    right: Iterable<Right>,
+    onLeft: (item: Left) => OnLeft,
+    onRight: (item: Right) => OnRight,
+    is: (left: OnLeft, right: OnRight) => boolean = Object.is
+): Iterable<{ left: Left; right: Right }> {
+    if (is === Object.is) {
+        return from(function* () {
+            /** stores the right items for each key which have already been encountered in the nested loop */
+            const rightCache = new Map<OnRight, Right[]>();
+            /** the iterator for right, stored in a variable so it can be continuously iterated in the inner loop */
+            const rightIterator = right[Symbol.iterator]();
+
+            for (const leftItem of left) {
+                const leftKey = onLeft(leftItem);
+
+                // check the cache for right items
+                let rightCacheGroup = rightCache.get(leftKey as any);
+
+                if (rightCacheGroup !== undefined) {
+                    // cache is not empty, yield all joinings for cached items
+                    for (const rightItem of rightCacheGroup) {
+                        yield { left: leftItem, right: rightItem };
+                    }
+                }
+
+                // look for more matching right items, caching everything
+                for (const rightItem of fromIterator(rightIterator)) {
+                    const rightKey = onRight(rightItem);
+                    if (is(leftKey, rightKey)) {
+                        yield { left: leftItem, right: rightItem };
+                    }
+
+                    // cache the value
+                    const rightCacheGroup = rightCache.get(rightKey);
+                    if (rightCacheGroup !== undefined) {
+                        rightCacheGroup.push(rightItem);
+                    } else {
+                        rightCache.set(rightKey, [rightItem]);
+                    }
+                }
+            }
+        });
+    } else {
+        return from(function* () {
+            for (const leftItem of left) {
+                const leftKey = onLeft(leftItem);
+
+                for (const rightItem of right) {
+                    const rightKey = onRight(rightItem);
+
+                    if (is(leftKey, rightKey)) {
+                        yield { left: leftItem, right: rightItem };
+                    }
+                }
+            }
+        });
+    }
 }
 
 export const from = Itmod.from;
