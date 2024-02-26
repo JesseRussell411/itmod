@@ -125,11 +125,11 @@ export default class Itmod<T> implements Iterable<T> {
      */
     public static from<T>(
         source: Iterable<T> | (() => Iterable<T>),
-        properties: ItmodProperties<T> = {}
+        properties?: ItmodProperties<T>
     ): Itmod<T> {
         if (source instanceof Function) {
             return new Itmod({ expensive: true, ...properties }, source);
-        } else if (source instanceof Itmod) {
+        } else if (source instanceof Itmod && properties === undefined) {
             return source;
         } else {
             return new Itmod({ ...properties }, returns(source));
