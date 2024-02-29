@@ -1770,248 +1770,57 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
-    public get groupJoin(): {
-        <I, K, R>(
-            inner: Iterable<I>,
-            outerKeySelector: (item: T) => K,
-            innerKeySelector: (item: I) => K,
-            resultSelector: (outer: T, innerGroup: I[]) => R
-        ): Itmod<R>;
-        <I, R>(
-            inner: Iterable<I>,
-            is: (outer: T, inner: I) => boolean,
-            resultSelector: (outer: T, innerGroup: I[]) => R
-        ): Itmod<R>;
-    } {
+    public get join() {
         const self = this;
-        return function groupJoin<I, K, R>(
-            ...args:
-                | [
-                      inner: Iterable<I>,
-                      outerKeySelector: (item: T) => K,
-                      innerKeySelector: (item: I) => K,
-                      resultSelector: (outer: T, innerGroup: I[]) => any
-                  ]
-                | [
-                      inner: Iterable<I>,
-                      is: (outer: T, inner: I) => boolean,
-                      resultSelector: (outer: T, innerGroup: I[]) => any
-                  ]
-        ) {
+        return function join<
+            Type extends "left" | "right" | "inner" | "full",
+            R
+        >(
+            ...args: [
+                ...[type: Type],
+                ...(
+                    | [
+                          leftKey: keyof T | ((left: T) => any),
+                          rightKey: keyof R | ((right: R) => any)
+                      ]
+                    | [key: keyof (T | R) | ((left: T, right: R) => boolean)]
+                )
+            ]
+        ): Type extends "left"
+            ? [T, R | undefined]
+            : Type extends "right"
+            ? [T | undefined, R]
+            : Type extends "inner"
+            ? [T, R]
+            : Type extends "full"
+            ? [T | undefined, R | undefined]
+            : never {
             if (args.length === 3) {
-                const [inner, is, resultSelector] = args;
-                return new Itmod({}, () => {
-                    return groupJoinByComparison(
-                        self,
-                        inner,
-                        is,
-                        resultSelector,
-                        false
+                const [type, leftKey, rightKey] = args;
+                if (typeof leftKey !== "function") {
+                    return self.join(
+                        type,
+                        (leftItem: T) => leftItem[leftKey],
+                        rightKey
                     );
-                });
-            } else {
-                const [
-                    inner,
-                    outerKeySelector,
-                    innerKeySelector,
-                    resultSelector,
-                ] = args;
-                return new Itmod({}, () => {
-                    return groupJoinByKey(
-                        self,
-                        inner,
-                        outerKeySelector,
-                        innerKeySelector,
-                        resultSelector,
-                        false
+                }
+                if (typeof rightKey !== "function") {
+                    return self.join(
+                        type,
+                        leftKey,
+                        (rightItem: R) => rightItem[rightKey]
                     );
-                });
-            }
-        };
-    }
+                }
 
-    public get innerGroupJoin(): {
-        <I, K, R>(
-            inner: Iterable<I>,
-            outerKeySelector: (item: T) => K,
-            innerKeySelector: (item: I) => K,
-            resultSelector: (outer: T, innerGroup: I[]) => R
-        ): Itmod<R>;
-        <I, R>(
-            inner: Iterable<I>,
-            is: (outer: T, inner: I) => boolean,
-            resultSelector: (outer: T, innerGroup: I[]) => R
-        ): Itmod<R>;
-    } {
-        const self = this;
-        return function groupJoin<I, K, R>(
-            ...args:
-                | [
-                      inner: Iterable<I>,
-                      outerKeySelector: (item: T) => K,
-                      innerKeySelector: (item: I) => K,
-                      resultSelector: (outer: T, innerGroup: I[]) => any
-                  ]
-                | [
-                      inner: Iterable<I>,
-                      is: (outer: T, inner: I) => boolean,
-                      resultSelector: (outer: T, innerGroup: I[]) => any
-                  ]
-        ) {
-            if (args.length === 3) {
-                const [inner, is, resultSelector] = args;
-                return new Itmod({}, () => {
-                    return groupJoinByComparison(
-                        self,
-                        inner,
-                        is,
-                        resultSelector,
-                        true
-                    );
-                });
-            } else {
-                const [
-                    inner,
-                    outerKeySelector,
-                    innerKeySelector,
-                    resultSelector,
-                ] = args;
-                return new Itmod({}, () => {
-                    return groupJoinByKey(
-                        self,
-                        inner,
-                        outerKeySelector,
-                        innerKeySelector,
-                        resultSelector,
-                        true
-                    );
-                });
-            }
-        };
-    }
-
-    public get join(): {
-        <I, K, R>(
-            inner: Iterable<I>,
-            outerKeySelector: (item: T) => K,
-            innerKeySelector: (item: I) => K,
-            resultSelector: (outer: T, innerGroup: I | undefined) => R
-        ): Itmod<R>;
-        <I, R>(
-            inner: Iterable<I>,
-            is: (outer: T, inner: I) => boolean,
-            resultSelector: (outer: T, innerGroup: I | undefined) => R
-        ): Itmod<R>;
-    } {
-        const self = this;
-        return function join<I, K, R>(
-            ...args:
-                | [
-                      inner: Iterable<I>,
-                      outerKeySelector: (item: T) => K,
-                      innerKeySelector: (item: I) => K,
-                      resultSelector: (outer: T, innerGroup: I | undefined) => R
-                  ]
-                | [
-                      inner: Iterable<I>,
-                      is: (outer: T, inner: I) => boolean,
-                      resultSelector: (outer: T, innerGroup: I | undefined) => R
-                  ]
-        ) {
-            if (args.length === 3) {
-                const [inner, is, resultSelector] = args;
-                return new Itmod({}, () => {
-                    return joinByComparison(
-                        self,
-                        inner,
-                        is,
-                        resultSelector,
-                        false
-                    );
-                });
-            } else {
-                const [
-                    inner,
-                    outerKeySelector,
-                    innerKeySelector,
-                    resultSelector,
-                ] = args;
-                return new Itmod({}, () => {
-                    return joinByKey(
-                        self,
-                        inner,
-                        outerKeySelector,
-                        innerKeySelector,
-                        resultSelector,
-                        false
-                    );
-                });
-            }
-        };
-    }
-
-    public get innerJoin(): {
-        <I, K, R>(
-            inner: Iterable<I>,
-            outerKeySelector: (item: T) => K,
-            innerKeySelector: (item: I) => K,
-            resultSelector: (outer: T, innerGroup: I | undefined) => R
-        ): Itmod<R>;
-        <I, R>(
-            inner: Iterable<I>,
-            is: (outer: T, inner: I) => boolean,
-            resultSelector: (outer: T, innerGroup: I | undefined) => R
-        ): Itmod<R>;
-    } {
-        const self = this;
-        return function join<I, K, R>(
-            ...args:
-                | [
-                      inner: Iterable<I>,
-                      outerKeySelector: (item: T) => K,
-                      innerKeySelector: (item: I) => K,
-                      resultSelector: (
-                          outer: T,
-                          innerGroup: I | undefined
-                      ) => any
-                  ]
-                | [
-                      inner: Iterable<I>,
-                      is: (outer: T, inner: I) => boolean,
-                      resultSelector: (
-                          outer: T,
-                          innerGroup: I | undefined
-                      ) => any
-                  ]
-        ) {
-            if (args.length === 3) {
-                const [inner, is, resultSelector] = args;
-                return new Itmod({}, () => {
-                    return joinByComparison(
-                        self,
-                        inner,
-                        is,
-                        resultSelector,
-                        true
-                    );
-                });
-            } else {
-                const [
-                    inner,
-                    outerKeySelector,
-                    innerKeySelector,
-                    resultSelector,
-                ] = args;
-                return new Itmod({}, () => {
-                    return joinByKey(
-                        self,
-                        inner,
-                        outerKeySelector,
-                        innerKeySelector,
-                        resultSelector,
-                        true
-                    );
-                });
+                return new Itmod({}, function* () {});
+            } else if (args.length === 2) {
+                if (typeof args[1] !== "function") {
+                    const [type, key] = args;
+                    const keySelector = (item: T | R) => item[key];
+                    return self.join(type, keySelector, keySelector);
+                }
+                const [type, on] = args;
+                return new Itmod({}, function* () {});
             }
         };
     }
@@ -3063,112 +2872,6 @@ function split<T, O>(
     };
 }
 
-function groupJoinByKey<O, I, K, R>(
-    left: Iterable<O>,
-    right: Iterable<I>,
-    outerKeySelector: (item: O) => K,
-    innerKeySelector: (item: I) => K,
-    resultSelector: (outer: O, innerGroup: I[]) => R,
-    inner: boolean
-): Iterable<R> {
-    return {
-        *[Symbol.iterator]() {
-            const rightGrouped = groupBy(right, innerKeySelector);
-
-            for (const item of left) {
-                const key = outerKeySelector(item);
-                const group = rightGrouped.get(key);
-                if (group !== undefined || !inner) {
-                    const result = resultSelector(item, group ?? []);
-                    yield result;
-                }
-            }
-        },
-    };
-}
-
-function groupJoinByComparison<O, I, R>(
-    left: Iterable<O>,
-    right: Iterable<I>,
-    is: (outer: O, inner: I) => boolean,
-    resultSelector: (outer: O, innerGroup: I[]) => R,
-    inner: boolean
-): Iterable<R> {
-    return {
-        *[Symbol.iterator]() {
-            const innerCached = toArray(right);
-
-            for (const o of left) {
-                const innerGroup: I[] = [];
-                for (const inner of innerCached) {
-                    if (is(o, inner)) {
-                        innerGroup.push(inner);
-                    }
-                }
-
-                if (innerGroup.length > 0 || !inner) {
-                    const result = resultSelector(o, innerGroup);
-                    yield result;
-                }
-            }
-        },
-    };
-}
-
-function joinByKey<A, B, K, R>(
-    left: Iterable<A>,
-    right: Iterable<B>,
-    leftKeySelector: (item: A) => K,
-    rightKeySelector: (item: B) => K,
-    resultSelector: (left: A, right: B | undefined) => R,
-    inner: boolean
-): Iterable<R> {
-    return {
-        *[Symbol.iterator]() {
-            const rightIndexed = indexBy(right, rightKeySelector);
-            for (const item of left) {
-                const key = leftKeySelector(item);
-                if (!inner || rightIndexed.has(key)) {
-                    const rightItem = rightIndexed.get(key);
-                    const result = resultSelector(item, rightItem);
-                    yield result;
-                }
-            }
-        },
-    };
-}
-
-function joinByComparison<A, B, R>(
-    left: Iterable<A>,
-    right: Iterable<B>,
-    is: (left: A, right: B) => boolean,
-    resultSelector: (left: A, right: B | undefined) => R,
-    inner: boolean
-) {
-    return {
-        *[Symbol.iterator]() {
-            const rightCached = toArray(right);
-            for (const item of left) {
-                let matchingRightItem: B | undefined = undefined;
-                let itemFound = false;
-
-                for (const rightItem of rightCached) {
-                    if (is(item, rightItem)) {
-                        matchingRightItem = rightItem;
-                        itemFound = true;
-                        break;
-                    }
-                }
-
-                if (itemFound || !inner) {
-                    const result = resultSelector(item, matchingRightItem);
-                    yield result;
-                }
-            }
-        },
-    };
-}
-
 function indexBy<T, K>(
     items: Iterable<T>,
     keySelector: (item: T, index: number) => K
@@ -3371,67 +3074,6 @@ function pickTheSet<Left, Right>(
         } else {
             return "left";
         }
-    }
-}
-
-function innerJoin<Left, Right, OnLeft, OnRight>(
-    left: Iterable<Left>,
-    right: Iterable<Right>,
-    onLeft: (item: Left) => OnLeft,
-    onRight: (item: Right) => OnRight,
-    is: (left: OnLeft, right: OnRight) => boolean = Object.is
-): Iterable<{ left: Left; right: Right }> {
-    if (is === Object.is) {
-        return from(function* () {
-            /** stores the right items for each key which have already been encountered in the nested loop */
-            const rightCache = new Map<OnRight, Right[]>();
-            /** the iterator for right, stored in a variable so it can be continuously iterated in the inner loop */
-            const rightIterator = right[Symbol.iterator]();
-
-            for (const leftItem of left) {
-                const leftKey = onLeft(leftItem);
-
-                // check the cache for right items
-                let rightCacheGroup = rightCache.get(leftKey as any);
-
-                if (rightCacheGroup !== undefined) {
-                    // cache is not empty, yield all joinings for cached items
-                    for (const rightItem of rightCacheGroup) {
-                        yield { left: leftItem, right: rightItem };
-                    }
-                }
-
-                // look for more matching right items, caching everything
-                for (const rightItem of fromIterator(rightIterator)) {
-                    const rightKey = onRight(rightItem);
-                    if (is(leftKey, rightKey)) {
-                        yield { left: leftItem, right: rightItem };
-                    }
-
-                    // cache the value
-                    const rightCacheGroup = rightCache.get(rightKey);
-                    if (rightCacheGroup !== undefined) {
-                        rightCacheGroup.push(rightItem);
-                    } else {
-                        rightCache.set(rightKey, [rightItem]);
-                    }
-                }
-            }
-        });
-    } else {
-        return from(function* () {
-            for (const leftItem of left) {
-                const leftKey = onLeft(leftItem);
-
-                for (const rightItem of right) {
-                    const rightKey = onRight(rightItem);
-
-                    if (is(leftKey, rightKey)) {
-                        yield { left: leftItem, right: rightItem };
-                    }
-                }
-            }
-        });
     }
 }
 
