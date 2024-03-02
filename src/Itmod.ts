@@ -901,32 +901,34 @@ export default class Itmod<T> implements Iterable<T> {
      * @returns The items found in this Itmod plus the items in the given iterable, unless they where already in the Itmod.
      */
     public get union(): {
-        (
-            other: Iterable<T>,
-            /** How to identify each item. Defaults to {@link identity}. */
-            id?: (item: T) => any
+        <O>(
+            other: Iterable<O>,
+            /** How to identify each item is both sets. Defaults to {@link identity}. */
+            id?: (item: T | O) => any
         ): Itmod<T>;
         <O>(
             other: Iterable<O>,
-            /** How to identify each item from the itmod. Defaults to {@link identity}. */
-            id?: (item: T) => any,
-            /** How to identify each item from the given iterable. Defaults to {@link identity} if given undefined. If left blank, defaults to the identity function given to id. */
-            otherId?: (item: O) => any
+            ids: {
+                /** How to identify each item in this itmod. Defaults to {@link identity}.  */
+                selfId?: (item: T) => any;
+                /** How to identify each item in the other set. Defaults to {@link identity}. */
+                otherId?: (item: O) => any;
+            }
         ): Itmod<T>;
     } {
         const self = this;
         return function union<O>(
-            ...args: [
-                other: Iterable<O>,
-                id?: (item: T | O) => any,
-                otherId?: (item: O) => any
-            ]
+            other: Iterable<O>,
+            ids:
+                | ((item: T | O) => any)
+                | {
+                      selfId?: (item: T) => any;
+                      otherId?: (item: O) => any;
+                  } = identity
         ): Itmod<T | O> {
-            let [
-                other,
-                id = identity,
-                otherId = args.length === 3 ? identity : id,
-            ] = args;
+            const id = typeof ids === "function" ? ids : ids.selfId ?? identity;
+            const otherId =
+                typeof ids === "function" ? ids : ids.otherId ?? identity;
 
             return new Itmod({}, function* () {
                 const source = getDeepSource(self.getSource());
@@ -954,32 +956,34 @@ export default class Itmod<T> implements Iterable<T> {
      * @returns The items found in both this Itmod and the given iterable.
      */
     public get intersection(): {
-        (
-            other: Iterable<T>,
-            /** How to identify each item. Defaults to {@link identity}. */
-            id?: (item: T) => any
+        <O>(
+            other: Iterable<O>,
+            /** How to identify each item is both sets. Defaults to {@link identity}. */
+            id?: (item: T | O) => any
         ): Itmod<T>;
         <O>(
             other: Iterable<O>,
-            /** How to identify each item from the itmod. Defaults to {@link identity}. */
-            id?: (item: T) => any,
-            /** How to identify each item from the given iterable. Defaults to {@link identity} if given undefined. If left blank, defaults to the identity function given to id. */
-            otherId?: (item: O) => any
+            ids: {
+                /** How to identify each item in this itmod. Defaults to {@link identity}.  */
+                selfId?: (item: T) => any;
+                /** How to identify each item in the other set. Defaults to {@link identity}. */
+                otherId?: (item: O) => any;
+            }
         ): Itmod<T>;
     } {
         const self = this;
         return function intersection<O>(
-            ...args: [
-                other: Iterable<O>,
-                id?: (item: T | O) => any,
-                otherId?: (item: O) => any
-            ]
+            other: Iterable<O>,
+            ids:
+                | ((item: T | O) => any)
+                | {
+                      selfId?: (item: T) => any;
+                      otherId?: (item: O) => any;
+                  } = identity
         ): Itmod<T | O> {
-            let [
-                other,
-                id = identity,
-                otherId = args.length === 3 ? identity : id,
-            ] = args;
+            const id = typeof ids === "function" ? ids : ids.selfId ?? identity;
+            const otherId =
+                typeof ids === "function" ? ids : ids.otherId ?? identity;
 
             return new Itmod({}, function* () {
                 const source = getDeepSource(self.getSource());
@@ -1026,32 +1030,34 @@ export default class Itmod<T> implements Iterable<T> {
      * @returns The items found in this Itmod but not in the given iterable.
      */
     public get difference(): {
-        (
-            other: Iterable<T>,
-            /** How to identify each item. Defaults to {@link identity}. */
-            id?: (item: T) => any
+        <O>(
+            other: Iterable<O>,
+            /** How to identify each item is both sets. Defaults to {@link identity}. */
+            id?: (item: T | O) => any
         ): Itmod<T>;
         <O>(
             other: Iterable<O>,
-            /** How to identify each item from the itmod. Defaults to {@link identity}. */
-            id?: (item: T) => any,
-            /** How to identify each item from the given iterable. Defaults to {@link identity} if given undefined. If left blank, defaults to the identity function given to id. */
-            otherId?: (item: O) => any
+            ids: {
+                /** How to identify each item in this itmod. Defaults to {@link identity}.  */
+                selfId?: (item: T) => any;
+                /** How to identify each item in the other set. Defaults to {@link identity}. */
+                otherId?: (item: O) => any;
+            }
         ): Itmod<T>;
     } {
         const self = this;
         return function difference<O>(
-            ...args: [
-                other: Iterable<O>,
-                id?: (item: T | O) => any,
-                otherId?: (item: O) => any
-            ]
+            other: Iterable<O>,
+            ids:
+                | ((item: T | O) => any)
+                | {
+                      selfId?: (item: T) => any;
+                      otherId?: (item: O) => any;
+                  } = identity
         ): Itmod<T> {
-            let [
-                other,
-                id = identity,
-                otherId = args.length === 3 ? identity : id,
-            ] = args;
+            const id = typeof ids === "function" ? ids : ids.selfId ?? identity;
+            const otherId =
+                typeof ids === "function" ? ids : ids.otherId ?? identity;
 
             return new Itmod({}, function* () {
                 const source = getDeepSource(self.getSource());
@@ -1770,57 +1776,473 @@ export default class Itmod<T> implements Iterable<T> {
         };
     }
 
-    public get join() {
-        const self = this;
-        return function join<
-            Type extends "left" | "right" | "inner" | "full",
+    public get join(): {
+        <Type extends "lc" | "cr" | "c" | "lcr" | "cross" | "full cross", R>(
+            type: Type,
+            right: Iterable<R>
+        ): Itmod<
+            {
+                lc: [T, R | undefined];
+                cr: [T | undefined, R];
+                c: [T, R];
+                lcr: [T | undefined, R | undefined];
+                cross: [T, R];
+                "full cross": [T | undefined, R | undefined];
+            }[Type]
+        >;
+        <
+            Type extends
+                | "l"
+                | "i"
+                | "r"
+                | "li"
+                | "ir"
+                | "lr"
+                | "lir"
+                | "left"
+                | "right"
+                | "inner"
+                | "full",
             R
         >(
-            ...args: [
-                ...[type: Type],
-                ...(
-                    | [
-                          leftKey: keyof T | ((left: T) => any),
-                          rightKey: keyof R | ((right: R) => any)
-                      ]
-                    | [key: keyof (T | R) | ((left: T, right: R) => boolean)]
-                )
-            ]
-        ): Type extends "left"
-            ? [T, R | undefined]
-            : Type extends "right"
-            ? [T | undefined, R]
-            : Type extends "inner"
-            ? [T, R]
-            : Type extends "full"
-            ? [T | undefined, R | undefined]
-            : never {
-            if (args.length === 3) {
-                const [type, leftKey, rightKey] = args;
-                if (typeof leftKey !== "function") {
-                    return self.join(
-                        type,
-                        (leftItem: T) => leftItem[leftKey],
-                        rightKey
-                    );
+            type: Type,
+            right: Iterable<R>,
+            leftKey: keyof T | ((left: T) => any),
+            rightKey: keyof R | ((right: R) => any)
+        ): Itmod<
+            {
+                l: [T, undefined];
+                i: [T, R];
+                r: [undefined, R];
+                li: [T, R | undefined];
+                ir: [T | undefined, R];
+                lr: [T, undefined] | [undefined, R];
+                lir: [T | undefined, R | undefined];
+                left: [T, R | undefined];
+                right: [T | undefined, R];
+                inner: [T, R];
+                full: [T | undefined, R | undefined];
+            }[Type]
+        >;
+
+        <
+            Type extends
+                | "l"
+                | "i"
+                | "r"
+                | "li"
+                | "ir"
+                | "lr"
+                | "lir"
+                | "left"
+                | "right"
+                | "inner"
+                | "full",
+            R
+        >(
+            type: Type,
+            right: Iterable<R>,
+            key: keyof T & keyof R
+        ): Itmod<
+            {
+                l: [T, undefined];
+                i: [T, R];
+                r: [undefined, R];
+                li: [T, R | undefined];
+                ir: [T | undefined, R];
+                lr: [T, undefined] | [undefined, R];
+                lir: [T | undefined, R | undefined];
+                left: [T, R | undefined];
+                right: [T | undefined, R];
+                inner: [T, R];
+                full: [T | undefined, R | undefined];
+            }[Type]
+        >;
+
+        <
+            Type extends
+                | "l"
+                | "i"
+                | "r"
+                | "li"
+                | "ir"
+                | "lr"
+                | "lir"
+                | "left"
+                | "right"
+                | "inner"
+                | "full",
+            R
+        >(
+            type: Type,
+            right: Iterable<R>,
+            on: (left: T, right: R) => boolean
+        ): Itmod<
+            {
+                l: [T, undefined];
+                i: [T, R];
+                r: [undefined, R];
+                li: [T, R | undefined];
+                ir: [T | undefined, R];
+                lr: [T, undefined] | [undefined, R];
+                lir: [T | undefined, R | undefined];
+                left: [T, R | undefined];
+                right: [T | undefined, R];
+                inner: [T, R];
+                full: [T | undefined, R | undefined];
+            }[Type]
+        >;
+    } {
+        const self = this;
+        return function join<R>(
+            ...args:
+                | [
+                      ...[
+                          type:
+                              | "l"
+                              | "i"
+                              | "r"
+                              | "li"
+                              | "ir"
+                              | "lr"
+                              | "lir"
+                              | "left"
+                              | "right"
+                              | "inner"
+                              | "full",
+                          right: Iterable<R>
+                      ],
+                      ...(
+                          | [
+                                leftKey: keyof T | ((left: T) => any),
+                                rightKey: keyof R | ((right: R) => any)
+                            ]
+                          | [key: keyof T & keyof R]
+                          | [on: (left: T, right: R) => boolean]
+                      )
+                  ]
+                | [
+                      type: "lc" | "cr" | "c" | "lcr" | "cross" | "full cross",
+                      right: Iterable<R>
+                  ]
+        ): any {
+            if (args.length === 2) {
+                let [type, right] = args;
+                switch (type) {
+                    case "lc":
+                        return from(function* () {
+                            right = cachingIterable(right);
+                            for (const leftItem of self) {
+                                for (const rightItem of right) {
+                                    yield [leftItem, rightItem];
+                                }
+                            }
+                            for (const rightItem of right) {
+                                yield [undefined, rightItem];
+                            }
+                        });
+                    case "cross":
+                    case "c":
+                        return from(function* () {
+                            right = cachingIterable(right);
+                            for (const leftItem of self) {
+                                for (const rightItem of right) {
+                                    yield [leftItem, rightItem];
+                                }
+                            }
+                        });
+
+                    case "cr":
+                        return from(function* () {
+                            right = cachingIterable(right);
+                            for (const leftItem of self) {
+                                for (const rightItem of right) {
+                                    yield [leftItem, rightItem];
+                                }
+                            }
+                            for (const rightItem of right) {
+                                yield [undefined, rightItem];
+                            }
+                        });
+                    case "full cross":
+                    case "lcr":
+                        return from(function* () {
+                            right = cachingIterable(right);
+                            for (const leftItem of self) {
+                                yield [leftItem, undefined];
+                                for (const rightItem of right) {
+                                    yield [leftItem, rightItem];
+                                }
+                            }
+                            for (const rightItem of right) {
+                                yield [undefined, rightItem];
+                            }
+                        });
+                    default:
+                        throw new Error("invalid join type: " + type);
                 }
-                if (typeof rightKey !== "function") {
+            }
+
+            function fieldNameAsFunction<T>(
+                field: keyof T | ((item: T) => any)
+            ): (item: T) => any {
+                if (typeof field !== "function") {
+                    return (item) => item[field];
+                } else {
+                    return field;
+                }
+            }
+
+            if (args.length === 4) {
+                const [type, right, leftKey, rightKey] = args;
+
+                if (
+                    typeof leftKey !== "function" ||
+                    typeof rightKey !== "function"
+                ) {
                     return self.join(
                         type,
-                        leftKey,
-                        (rightItem: R) => rightItem[rightKey]
+                        right,
+                        fieldNameAsFunction(leftKey),
+                        fieldNameAsFunction(rightKey)
                     );
                 }
 
-                return new Itmod({}, function* () {});
-            } else if (args.length === 2) {
-                if (typeof args[1] !== "function") {
-                    const [type, key] = args;
-                    const keySelector = (item: T | R) => item[key];
-                    return self.join(type, keySelector, keySelector);
+                switch (type) {
+                    case "l":
+                        return self
+                            .difference(right, {
+                                selfId: leftKey,
+                                otherId: rightKey,
+                            })
+                            .map((leftItem) => [leftItem, undefined]) as any;
+                    case "inner":
+                    case "i":
+                        return new Itmod({}, function* () {
+                            const rightByKey = groupBy(right, rightKey);
+                            for (const leftItem of self) {
+                                const key = leftKey(leftItem);
+                                const rightGroup = rightByKey.get(key);
+                                if (rightGroup !== undefined) {
+                                    for (const rightItem of rightGroup) {
+                                        yield [leftItem, rightItem];
+                                    }
+                                }
+                            }
+                        }) as any;
+                    case "r":
+                        return from(right)
+                            .difference(self, {
+                                selfId: rightKey,
+                                otherId: leftKey,
+                            })
+                            .map((rightItem) => [undefined, rightItem]) as any;
+                    case "left":
+                    case "li":
+                        return new Itmod({}, function* () {
+                            const rightByKey = groupBy(right, rightKey);
+                            for (const leftItem of self) {
+                                const key = leftKey(leftItem);
+                                const rightGroup = rightByKey.get(key);
+                                if (rightGroup !== undefined) {
+                                    yield* from(rightGroup).map((rightItem) => [
+                                        leftItem,
+                                        rightItem,
+                                    ]);
+                                } else {
+                                    yield [leftItem, undefined];
+                                }
+                            }
+                        }) as any;
+                    case "right":
+                    case "ir":
+                        return new Itmod({}, function* () {
+                            const leftByKey = groupBy(self, leftKey);
+
+                            for (const rightItem of right) {
+                                const key = rightKey(rightItem);
+                                const leftGroup = leftByKey.get(key);
+                                if (leftGroup !== undefined) {
+                                    for (const leftItem of leftGroup) {
+                                        yield [leftItem, rightItem];
+                                    }
+                                } else {
+                                    yield [undefined, rightItem];
+                                }
+                            }
+                        }) as any;
+                    case "lr":
+                        return new Itmod({}, function* () {
+                            const unMatchedRight = groupBy(right, rightKey);
+                            const matchedKeys = new Set<any>();
+
+                            for (const leftItem of self) {
+                                const key = leftKey(leftItem);
+                                if (unMatchedRight.has(key)) {
+                                    unMatchedRight.delete(key);
+                                    matchedKeys.add(key);
+                                } else if (!matchedKeys.has(key)) {
+                                    yield [leftItem, undefined];
+                                }
+                            }
+
+                            yield* from(unMatchedRight.values())
+                                .flat()
+                                .map((rightItem) => [undefined, rightItem]);
+                        }) as any;
+                    case "full":
+                    case "lir":
+                        return new Itmod({}, function* () {
+                            const unMatchedRight = groupBy(right, rightKey);
+                            const matchedKeys = new Set<any>();
+
+                            for (const leftItem of self) {
+                                const key = leftKey(leftItem);
+                                const rightGroup = unMatchedRight.get(key);
+                                if (rightGroup !== undefined) {
+                                    for (const rightItem of rightGroup) {
+                                        yield [leftItem, rightItem];
+                                    }
+                                    unMatchedRight.delete(key);
+                                    matchedKeys.add(key);
+                                } else if (!matchedKeys.has(key)) {
+                                    yield [leftItem, undefined];
+                                }
+                            }
+
+                            yield* from(unMatchedRight.values())
+                                .flat()
+                                .map((rightItem) => [undefined, rightItem]);
+                        }) as any;
+                    default:
+                        throw new Error("invalid join type: " + type);
                 }
-                const [type, on] = args;
-                return new Itmod({}, function* () {});
+            } else {
+                if (typeof args[2] !== "function") {
+                    const [type, right, key] = args;
+                    return self.join(
+                        type,
+                        right,
+                        fieldNameAsFunction(key),
+                        fieldNameAsFunction(key)
+                    );
+                }
+
+                let [type, right, on] = args;
+                switch (type) {
+                    case "l":
+                        return from(function* () {
+                            right = asArray(right);
+                            yield* self
+                                .filter((leftItem) =>
+                                    from(right)
+                                        .map((rightItem) =>
+                                            on(leftItem, rightItem)
+                                        )
+                                        .none(identity)
+                                )
+                                .map((leftItem) => [leftItem, undefined]);
+                        }) as any;
+                    case "inner":
+                    case "i":
+                        return from(function* () {
+                            right = cachingIterable(right);
+                            for (const leftItem of self) {
+                                for (const rightItem of right) {
+                                    if (on(leftItem, rightItem)) {
+                                        yield [leftItem, rightItem];
+                                    }
+                                }
+                            }
+                        }) as any;
+                    case "r":
+                        return from(function* () {
+                            const left = self.asArray();
+                            yield* from(right).filter((rightItem) =>
+                                from(left)
+                                    .map((leftItem) => on(leftItem, rightItem))
+                                    .none(identity)
+                            );
+                        }) as any;
+                    case "left":
+                    case "li":
+                        return from(function* () {
+                            right = cachingIterable(right);
+                            for (const leftItem of self) {
+                                let noMatch = true;
+                                for (const rightItem of right) {
+                                    if (on(leftItem, rightItem)) {
+                                        yield [leftItem, rightItem];
+                                        noMatch = false;
+                                    }
+                                }
+                                if (noMatch) {
+                                    yield [leftItem, undefined];
+                                }
+                            }
+                        }) as any;
+                    case "right":
+                    case "ir":
+                        return from(function* () {
+                            const left = cachingIterable(self);
+                            for (const rightItem of right) {
+                                let noMatch = true;
+                                for (const leftItem of left) {
+                                    if (on(leftItem, rightItem)) {
+                                        yield [leftItem, rightItem];
+                                        noMatch = false;
+                                    }
+                                }
+                                if (noMatch) {
+                                    yield [undefined, rightItem];
+                                }
+                            }
+                        }) as any;
+                    case "lr":
+                        return from(function* () {
+                            right = asArray(right);
+                            const unMatchedRight = new Set(right);
+                            for (const leftItem of self) {
+                                for (const rightItem of right) {
+                                    if (on(leftItem, rightItem)) {
+                                        unMatchedRight.delete(rightItem);
+                                    } else {
+                                        yield [leftItem, undefined];
+                                    }
+                                }
+
+                                yield* from(unMatchedRight).map((rightItem) => [
+                                    undefined,
+                                    rightItem,
+                                ]);
+                            }
+                        }) as any;
+                    case "full":
+                    case "lir":
+                        return from(function* () {
+                            right = asArray(right);
+                            const unMatchedRight = new Set(right);
+                            for (const leftItem of self) {
+                                let noMatch = true;
+                                for (const rightItem of right) {
+                                    if (on(leftItem, rightItem)) {
+                                        yield [leftItem, rightItem];
+                                        noMatch = false;
+                                        unMatchedRight.delete(rightItem);
+                                    }
+                                }
+                                if (noMatch) {
+                                    yield [leftItem, undefined];
+                                }
+                            }
+                            yield* from(unMatchedRight).map((rightItem) => [
+                                undefined,
+                                rightItem,
+                            ]);
+                        }) as any;
+                    default:
+                        throw new Error("invalid join type: " + type);
+                }
             }
         };
     }
@@ -3077,6 +3499,165 @@ function pickTheSet<Left, Right>(
     }
 }
 
+function lazyGroupBy<K, T>(
+    items: Iterable<T>,
+    keySelector: (item: T) => K
+): LazilyGrouped<K, T> {
+    return new LazilyGrouped(items, keySelector);
+}
+
+export class LazilyGrouped<K, T>
+    implements Iterable<[key: K, group: Iterable<T>]>
+{
+    private readonly groups: Map<K, Iterable<T>> = new Map();
+    private readonly groupGenerator: Iterator<[key: K, group: Iterable<T>]>;
+    private iterateGroupGenerator(): Iterable<[key: K, group: Iterable<T>]> {
+        const self = this;
+        return from(function* () {
+            for (const entry of wrapIterator(self.groupGenerator)) {
+                self.groups.set(entry[0], entry[1]);
+                yield entry;
+            }
+        });
+    }
+
+    public *[Symbol.iterator]() {
+        yield* this.groups;
+        yield* this.iterateGroupGenerator();
+    }
+
+    public constructor(items: Iterable<T>, keySelector: (item: T) => K) {
+        this.groupGenerator = lazyGroupBy_helper(items, keySelector)[
+            Symbol.iterator
+        ]();
+    }
+
+    public get(key: K) {
+        const group = this.groups.get(key);
+        if (group !== undefined) {
+            return group;
+        } else {
+            for (const [groupKey, group] of this.iterateGroupGenerator()) {
+                if (groupKey === key) {
+                    return group;
+                }
+            }
+        }
+        return undefined;
+    }
+}
+
+function tuple<Items extends readonly any[]>(...items: Items): [...Items] {
+    return items as [...Items];
+}
+
+function lazyGroupBy_helper<K, T>(
+    items: Iterable<T>,
+    keySelector: (item: T) => K
+): Iterable<[key: K, group: Iterable<T>]> {
+    return from(function* () {
+        const itemQueues = new Map<K, LinkedList<T>>();
+        /** Keys to groups that have not yet been yielded. */
+        const keyQueue = new LinkedList<K>();
+        const iter = items[Symbol.iterator]();
+
+        keyGenerator: while (true) {
+            // check key queue
+            const keyNode = keyQueue.popNode();
+
+            if (keyNode !== undefined) {
+                const key = keyNode.value;
+
+                yield getGroup(key);
+                continue keyGenerator;
+            }
+
+            // find next key
+            for (const item of wrapIterator(iter)) {
+                const itemKey = keySelector(item);
+
+                /** the group cache that the item belongs to and that the key indexes */
+                let itemQueue = itemQueues.get(itemKey);
+
+                // does the group cache exist? if it does, the key has already been added to the keyCache or yielded
+                if (itemQueue !== undefined) {
+                    // add the item to the group cache and continue looking for the next key
+                    itemQueue.unshift(item);
+                } else {
+                    // if it does not, create it and add the item to it
+                    itemQueue = new LinkedList<T>();
+                    itemQueue.unshift(item);
+                    itemQueues.set(itemKey, itemQueue);
+
+                    // also
+
+                    // the key has not been yielded or added to the queue yet
+                    // so add the key to the queue and go back up to the top
+                    yield getGroup(itemKey);
+                    continue keyGenerator;
+                }
+            }
+
+            // main list has been exhausted without finding a new key, key generator loop is complete
+            break;
+        }
+
+        function getGroup(key: K) {
+            return tuple(
+                key,
+                Itmod.from(function* () {
+                    // get the appropriate item queue
+                    let itemQueue = itemQueues.get(key);
+
+                    // this if statement should never come out true.
+                    // because, at this point, the itemQueue should already exist as that is the indicator
+                    // that the key has been yielded or added to the key queue and this function should never
+                    // be called if that hasn't happened
+                    if (itemQueue === undefined) {
+                        itemQueue = new LinkedList<T>();
+                        itemQueues.set(key, itemQueue);
+                    }
+
+                    itemGenerator: while (true) {
+                        // check item queue
+                        const itemNode = itemQueue.popNode();
+                        if (itemNode !== undefined) {
+                            yield itemNode.value;
+                            continue itemGenerator;
+                        }
+
+                        // find more items
+                        for (const item of wrapIterator(iter)) {
+                            const itemKey = keySelector(item);
+
+                            // does item belong to group?
+                            if (itemKey === key) {
+                                // yes, yield it and continue from the top
+                                yield item;
+                                continue itemGenerator;
+                            } else {
+                                // no, queue it for the group it does belong to and keep looking
+                                let itemQueue = itemQueues.get(itemKey);
+                                if (itemQueue === undefined) {
+                                    // if item queue not found
+                                    // add key to key queue because it has not been yielded or queued yet
+                                    keyQueue.unshift(itemKey);
+                                    itemQueue = new LinkedList<T>();
+                                    itemQueues.set(itemKey, itemQueue);
+                                }
+                                itemQueue.unshift(item);
+                            }
+                        }
+
+                        // main list has been exhausted without finding another item, item generator for this group is complete
+                        break itemGenerator;
+                    }
+                })
+            );
+        }
+    });
+}
+
 export const from = Itmod.from;
 
 export const fromIterator = Itmod.fromIterator;
@@ -3090,3 +3671,9 @@ export const of = Itmod.of;
 export const range = Itmod.range;
 
 export const empty = Itmod.empty;
+from([1, 2, 3]).join(
+    "inner",
+    ["1", "2", "3"],
+    (left) => "" + left,
+    (right) => right
+);
