@@ -1,4 +1,11 @@
 import AsyncItmod from "./AsyncItmod";
+import {
+    requireGreaterThanZero,
+    requireIntegerOrInfinity,
+    requireNonNegative,
+    requireSafeInteger,
+    requireSafeIntegerOrInfinity,
+} from "./checks";
 import CircularBuffer from "./collections/CircularBuffer";
 import Collection from "./collections/Collection";
 import LinkedList from "./collections/LinkedList";
@@ -19,13 +26,6 @@ import {
 } from "./collections/iterables";
 import { toArray, toSet } from "./collections/to";
 import { identity, resultOf, returns } from "./functional/functions";
-import {
-    requireGreaterThanZero,
-    requireIntegerOrInfinity,
-    requireNonNegative,
-    requireSafeInteger,
-    requireSafeIntegerOrInfinity,
-} from "./checks";
 import { BreakSignal, breakSignal } from "./signals";
 import {
     Comparator,
@@ -71,6 +71,8 @@ import { ReturnTypes } from "./types/functions";
 // TODO remove all uses of any, unless absolutely necessary
 
 // design note: the purpose of every method being an accessor (get) is to bind "this" on each method without making them fields and making every instance of Itmod take loads of memory just to exist.
+
+// #1 rule of optimizations: you can cheat as long as you don't get caught!
 
 /**
  * Information about an {@link Itmod} and its Iterable.
@@ -832,19 +834,7 @@ export default class Itmod<T> implements Iterable<T> {
             if (typeof times === "number") requireSafeInteger(times);
             if (times === 0) return Itmod.empty();
 
-            return new Itmod({}, function* () {
-                const cached = cachingIterable(self);
-
-                if (times === Infinity) {
-                    while (true) {
-                        yield* cached;
-                    }
-                } else {
-                    for (let i = zeroLike(times); i < times; i++) {
-                        yield* cached;
-                    }
-                }
-            });
+            return new RepeatItmod(self, times);
         };
     }
 
@@ -2835,6 +2825,107 @@ export class ReversedItmod<T> extends Itmod<T> {
         const self = this;
         return function asArray() {
             return self.toArray();
+        };
+    }
+}
+
+export class RepeatItmod<T> extends Itmod<T> {
+    protected readonly original: Itmod<T>;
+    protected readonly times: number | bigint;
+    public constructor(original: Itmod<T>, times: number | bigint) {
+        requireNonNegative(times);
+        if (typeof times === "number") requireSafeInteger(times);
+
+        super({}, function* () {
+            const source = cachingIterable(original);
+            if (times === Infinity) {
+                while (true) {
+                    yield* source;
+                }
+            } else {
+                for (let i = zeroLike(times); i < times; i++) {
+                    yield* source;
+                }
+            }
+        });
+
+        this.original = original;
+        this.times = times;
+    }
+
+    public get count() {
+        const self = this;
+        return function count() {
+            return self.original.count() * Number(self.times);
+        };
+    }
+
+    public get nonIteratedCountOrUndefined() {
+        const self = this;
+        return function nonIteratedCountOrUndefined() {
+            const count = self.original.nonIteratedCountOrUndefined();
+            if (count === undefined) return undefined;
+            return count * Number(self.times);
+        };
+    }
+
+    public get reverse() {
+        const self = this;
+        return function reverse() {
+            return new RepeatItmod(self.original.reverse(), self.times);
+        };
+    }
+
+    public get distinct() {
+        const self = this;
+        return function distinct(id?: (item: T) => any) {
+            return self.original.distinct(id);
+        };
+    }
+
+    public get toSet() {
+        const self = this;
+        return function toSet(): Set<T> {
+            return self.original.toSet();
+        };
+    }
+
+    public get asSet() {
+        const self = this;
+        return function asSet(): ReadonlySet<T> {
+            return self.original.asSet();
+        };
+    }
+
+    private get parentMap() {
+        return super.map;
+    }
+    public get map() {
+        const self = this;
+        return function map<R>(
+            mapping: (item: T, index: number) => R
+        ): Itmod<R> {
+            if (mapping.length >= 2) {
+                return self.parentMap(mapping);
+            } else {
+                return new RepeatItmod(self.original.map(mapping), self.times);
+            }
+        };
+    }
+
+    private get parentFilter() {
+        return super.filter;
+    }
+    public get filter() {
+        const self = this;
+        return function filter<R extends T = T>(
+            test: (item: T, index: number) => boolean
+        ): Itmod<R> {
+            if (test.length >= 2) {
+                return self.parentFilter(test);
+            } else {
+                return new RepeatItmod(self.original.filter(test), self.times);
+            }
         };
     }
 }
