@@ -834,7 +834,7 @@ export default class Itmod<T> implements Iterable<T> {
             if (typeof times === "number") requireSafeInteger(times);
             if (times === 0) return Itmod.empty();
 
-            return new RepeatItmod(self, times);
+            return new RepeatedItmod(self, times);
         };
     }
 
@@ -2829,7 +2829,7 @@ export class ReversedItmod<T> extends Itmod<T> {
     }
 }
 
-export class RepeatItmod<T> extends Itmod<T> {
+export class RepeatedItmod<T> extends Itmod<T> {
     protected readonly original: Itmod<T>;
     protected readonly times: number | bigint;
     public constructor(original: Itmod<T>, times: number | bigint) {
@@ -2872,7 +2872,7 @@ export class RepeatItmod<T> extends Itmod<T> {
     public get reverse() {
         const self = this;
         return function reverse() {
-            return new RepeatItmod(self.original.reverse(), self.times);
+            return new RepeatedItmod(self.original.reverse(), self.times);
         };
     }
 
@@ -2908,7 +2908,7 @@ export class RepeatItmod<T> extends Itmod<T> {
             if (mapping.length >= 2) {
                 return self.parentMap(mapping);
             } else {
-                return new RepeatItmod(self.original.map(mapping), self.times);
+                return new RepeatedItmod(self.original.map(mapping), self.times);
             }
         };
     }
@@ -2924,7 +2924,7 @@ export class RepeatItmod<T> extends Itmod<T> {
             if (test.length >= 2) {
                 return self.parentFilter(test);
             } else {
-                return new RepeatItmod(self.original.filter(test), self.times);
+                return new RepeatedItmod(self.original.filter(test), self.times);
             }
         };
     }
