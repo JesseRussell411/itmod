@@ -1,5 +1,7 @@
 import { requireNonNegative, requireSafeInteger } from "../checks";
 import Collection from "./Collection";
+import { asArray } from "./as";
+import { nonIteratedCountOrUndefined } from "./iterables";
 
 /**
  * Buffer of limited size that can shift, unshift, push, and pop elements equally efficiently. Elements can be added until the maximum size is reached; whereupon, elements on the opposite side of the buffer are removed to make room.
@@ -254,6 +256,12 @@ export default class CircularBuffer<T> extends Collection<T> {
             result.length = length;
             return result;
         }
+    }
+
+    public toReversedArray(): T[] {
+        const result = this.toArray();
+        result.reverse();
+        return result;
     }
 
     /**

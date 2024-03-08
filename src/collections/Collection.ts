@@ -49,6 +49,13 @@ export default abstract class Collection<T> implements Iterable<T> {
             },
         };
     }
+    
+    /**
+     * @returns The {@link Collection}'s contents copied into an {@link Array} in reverse order.
+     */
+    public toReversedArray(): T[] {
+        return [...this.reversed()];
+    }
 
     /**
      * @returns The first element in the collection given by its iterator.

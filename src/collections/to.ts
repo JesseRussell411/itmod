@@ -15,6 +15,21 @@ export function toArray<T>(collection: Iterable<T> | undefined): T[] {
 }
 
 /**
+ * @returns The given collection copied into an {@link Array} in reverse order.
+ */
+export function toReversedArray<T>(sequence: Iterable<T> | undefined): T[] {
+    if (sequence instanceof Collection) {
+        return sequence.toReversedArray();
+    } else if (sequence instanceof Itmod) {
+        return sequence.reverse().toArray();
+    } else {
+        const array = toArray(sequence);
+        array.reverse();
+        return array;
+    }
+}
+
+/**
  * @returns The given collection copied into a {@link Set}.
  */
 export function toSet<T>(collection: Iterable<T> | undefined): Set<T> {
