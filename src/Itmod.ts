@@ -2812,12 +2812,27 @@ export class ReversedItmod<T> extends Itmod<T> {
         };
     }
 
+    public get final() {
+        const self = this;
+        return function final(): T | undefined {
+            return self.original.first();
+        };
+    }
+
     public get toArray() {
         const self = this;
         return function toArray() {
-            const array = self.original.toArray();
-            array.reverse();
-            return array;
+            const originalSource = self.original.getSource();
+
+            if (
+                isArrayAsWritable(originalSource) &&
+                self.original.properties.fresh
+            ) {
+                originalSource.reverse();
+                return originalSource;
+            }
+
+            return [...from(originalSource).reverse()];
         };
     }
 
@@ -2908,7 +2923,10 @@ export class RepeatedItmod<T> extends Itmod<T> {
             if (mapping.length >= 2) {
                 return self.parentMap(mapping);
             } else {
-                return new RepeatedItmod(self.original.map(mapping), self.times);
+                return new RepeatedItmod(
+                    self.original.map(mapping),
+                    self.times
+                );
             }
         };
     }
@@ -2924,8 +2942,61 @@ export class RepeatedItmod<T> extends Itmod<T> {
             if (test.length >= 2) {
                 return self.parentFilter(test);
             } else {
-                return new RepeatedItmod(self.original.filter(test), self.times);
+                return new RepeatedItmod(
+                    self.original.filter(test),
+                    self.times
+                );
             }
+        };
+    }
+}
+
+export class FlattenedItmod<T> extends Itmod<
+    T extends Iterable<infer SubT> ? SubT : T
+> {
+    protected readonly original: Itmod<T>;
+    public constructor(original: Itmod<T>) {
+        super({}, function* () {
+            for (const item of original) {
+                if (isIterable(item)) {
+                    yield* item as any;
+                } else {
+                    yield item as any;
+                }
+            }
+        });
+        this.original = original;
+    }
+
+    public get reverse() {
+        const self = this;
+        return function reverse(): Itmod<
+            T extends Iterable<infer SubT> ? SubT : T
+        > {
+            return new FlattenedItmod(
+                self.original
+                    .reverse()
+                    .map((item) =>
+                        isIterable(item) ? from(item).reverse() : item
+                    ) as any
+            );
+        };
+    }
+
+    public get count() {
+        const self = this;
+        return function count() {
+            return self.original.fold(
+                0,
+                (total, item) =>
+                    total + (isIterable(item) ? from(item).count() : 1)
+            );
+        };
+    }
+
+    public get nonIteratedCountOrUndefined() {
+        return function nonIteratedCountOrUndefined() {
+            return undefined;
         };
     }
 }
