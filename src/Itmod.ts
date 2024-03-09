@@ -498,16 +498,10 @@ export default class Itmod<T> implements Iterable<T> {
      */
     public get filter() {
         const self = this;
-        return function filter<R extends T = T>(
+        return function filter(
             test: (value: T, index: number) => boolean
-        ): Itmod<R> {
-            return new Itmod({}, function* () {
-                let i = 0;
-                for (const value of self) {
-                    if (test(value, i)) yield value as R;
-                    i++;
-                }
-            });
+        ): Itmod<T> {
+            return new FilteredItmod(self, test);
         };
     }
 
@@ -517,7 +511,7 @@ export default class Itmod<T> implements Iterable<T> {
     public get defined() {
         const self = this;
         return function defined(): Itmod<T extends undefined ? never : T> {
-            return self.filter((item) => item !== undefined);
+            return self.filter((item) => item !== undefined) as Itmod<any>;
         };
     }
 
@@ -527,7 +521,7 @@ export default class Itmod<T> implements Iterable<T> {
     public get notNull() {
         const self = this;
         return function notNull(): Itmod<T extends null ? never : T> {
-            return self.filter((item) => item !== null);
+            return self.filter((item) => item !== null) as Itmod<any>;
         };
     }
 
@@ -539,7 +533,9 @@ export default class Itmod<T> implements Iterable<T> {
         return function notNullish(): Itmod<
             T extends null ? never : T extends undefined ? never : T
         > {
-            return self.filter((item) => item !== null && item !== undefined);
+            return self.filter(
+                (item) => item !== null && item !== undefined
+            ) as Itmod<any>;
         };
     }
 
@@ -2819,6 +2815,13 @@ export class ReversedItmod<T> extends Itmod<T> {
         };
     }
 
+    public get takeFinal() {
+        const self = this;
+        return function takeFinal(n: number | bigint) {
+            return self.original.take(n).reverse();
+        };
+    }
+
     public get toArray() {
         const self = this;
         return function toArray() {
@@ -2926,9 +2929,9 @@ export class RepeatedItmod<T> extends Itmod<T> {
     }
     public get filter() {
         const self = this;
-        return function filter<R extends T = T>(
+        return function filter(
             test: (item: T, index: number) => boolean
-        ): Itmod<R> {
+        ): Itmod<T> {
             if (test.length >= 2) {
                 return self.parentFilter(test);
             } else {
@@ -2987,6 +2990,37 @@ export class FlattenedItmod<T> extends Itmod<
     public get nonIteratedCountOrUndefined() {
         return function nonIteratedCountOrUndefined() {
             return undefined;
+        };
+    }
+}
+
+export class FilteredItmod<T> extends Itmod<T> {
+    private readonly original: Itmod<T>;
+    private readonly test: (item: T, index: number) => boolean;
+    public constructor(
+        original: Itmod<T>,
+        test: (item: T, index: number) => boolean
+    ) {
+        super({}, function* () {
+            let i = 0;
+            for (const item of original) {
+                if (test(item, i)) yield item;
+                i++;
+            }
+        });
+        this.original = original;
+        this.test = test;
+    }
+
+    public get reverse() {
+        const self = this;
+        const parentReverse = super.reverse;
+        return function reverse(): Itmod<T> {
+            if (self.test.length >= 2) {
+                return parentReverse();
+            } else {
+                return new FilteredItmod(self.original.reverse(), self.test);
+            }
         };
     }
 }
