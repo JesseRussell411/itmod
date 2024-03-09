@@ -24,7 +24,7 @@ import {
     nonIteratedCountOrUndefined,
     wrapIterator,
 } from "./collections/iterables";
-import { toArray, toReversedArray, toSet } from "./collections/to";
+import { toArray, toArrayReversed, toSet } from "./collections/to";
 import { identity, resultOf, returns } from "./functional/functions";
 import { BreakSignal, breakSignal } from "./signals";
 import {
@@ -2825,7 +2825,17 @@ export class ReversedItmod<T> extends Itmod<T> {
     public get toArray() {
         const self = this;
         return function toArray() {
-            return toReversedArray(self.original.getSource());
+            const originalSource = self.original.getSource();
+            
+            if (
+                isArrayAsWritable(originalSource) &&
+                self.original.properties.fresh
+            ) {
+                originalSource.reverse();
+                return originalSource;
+            }
+
+            return toArrayReversed(getDeepSource(originalSource));
         };
     }
 

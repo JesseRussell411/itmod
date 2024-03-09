@@ -17,7 +17,7 @@ export function toArray<T>(collection: Iterable<T> | undefined): T[] {
 /**
  * @returns The given collection copied into an {@link Array} in reverse order.
  */
-export function toReversedArray<T>(sequence: Iterable<T> | undefined): T[] {
+export function toArrayReversed<T>(sequence: Iterable<T> | undefined): T[] {
     if (sequence instanceof Collection) {
         return sequence.toArrayReversed();
     } else if (sequence instanceof Itmod) {

@@ -33,6 +33,12 @@ export default class IterableOfSize<
             throw new IterableOfIncorrectSizeError(this.size, count);
         }
     }
+
+    public toArrayReversed(): T[] {
+        const result = this.toArray();
+        result.reverse();
+        return result;
+    }
 }
 
 export class IterableOfIncorrectSizeError<
