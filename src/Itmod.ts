@@ -2826,7 +2826,7 @@ export class ReversedItmod<T> extends Itmod<T> {
         const self = this;
         return function toArray() {
             const originalSource = self.original.getSource();
-            
+
             if (
                 isArrayAsWritable(originalSource) &&
                 self.original.properties.fresh
