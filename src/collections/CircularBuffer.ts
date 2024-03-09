@@ -230,13 +230,7 @@ export default class CircularBuffer<T> extends Collection<T> {
 
             return result;
 
-            // design note: much faster than iteration ([...buffer])
-            // but I wish javascript had a memcopy-like function for
-            // copying items from a section of one array to a section of another.
-            //
-            // This requires the slice function to create a "middleman" array that isn't really necessary.
-            //
-            // splice does not count because it requires a rest parameter instead of an array.
+            // can't use splice because it requires a rest parameter instead of an array.
             // in testing, this function IS faster if re-written to use splice but the issue
             // is that to use splice, the entire array being spliced in must be copied onto the
             // call stack as though each item was a local variable, even if the array is 500,000 items long
