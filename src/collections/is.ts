@@ -32,9 +32,9 @@ export function isArrayAsWritable(value: any): boolean {
     return Array.isArray(value);
 }
 
-/** Whether the given value is a {@link Set}. The resulting type identity of the value will be a writable {@link Set} instead of a {@link ReadonlySet} like with {@link isArray}. */
+/** Whether the given value is a {@link Set}. The resulting type identity of the value will be a writable {@link Set} instead of a {@link ReadonlySet} like with {@link isSet}. */
 export function isSetAsWritable<T>(value: Iterable<T>): value is Set<T>;
-/** Whether the given value is a {@link Set}. The resulting type identity of the value will be a writable {@link Set} instead of a {@link ReadonlySet} like with {@link isArray}. */
+/** Whether the given value is a {@link Set}. The resulting type identity of the value will be a writable {@link Set} instead of a {@link ReadonlySet} like with {@link isSet}. */
 export function isSetAsWritable<T>(value: unknown): value is Set<unknown>;
 export function isSetAsWritable(value: any): boolean {
     return value instanceof Set;

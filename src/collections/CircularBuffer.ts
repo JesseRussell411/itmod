@@ -256,7 +256,7 @@ export default class CircularBuffer<T> extends Collection<T> {
         }
     }
 
-    public toReversedArray(): T[] {
+    public toArrayReversed(): T[] {
         const result = this.toArray();
         result.reverse();
         return result;
