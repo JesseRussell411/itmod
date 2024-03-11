@@ -1215,32 +1215,7 @@ export default class Itmod<T> implements Iterable<T> {
             count: number | bigint,
             getRandomInt?: (upperBound: number) => number
         ): Itmod<T> {
-            requireIntegerOrInfinity(count);
-            requireNonNegative(count);
-            return new Itmod({ expensive: true }, () => {
-                let source = self.getSource();
-                if (count === Infinity) return source;
-                if (count === 0) return emptyIterable();
-
-                let size = nonIteratedCountOrUndefined(source);
-                if (size === undefined) {
-                    // convert source to an array
-                    const array = toArray(source);
-                    source = array;
-
-                    // get length of the array
-                    size = array.length;
-                }
-
-                const indexesToTake = range(size)
-                    .shuffle(getRandomInt)
-                    .take(count)
-                    .asSet();
-
-                return from(source).filter((_, index) =>
-                    indexesToTake.has(index)
-                );
-            });
+            return new TakeRandomItmod(self, count, getRandomInt);
         };
     }
 
@@ -3142,6 +3117,57 @@ export class GroupedItmod<
     //         })
     //     };
     // }
+}
+
+export class TakeRandomItmod<T> extends Itmod<T> {
+    private readonly original: Itmod<T>;
+    private readonly _count: number | bigint; // had to add underscore to field name so that it doesn't collide with the count() method
+    private readonly getRandomInt?: (upperBound: number) => number;
+    public constructor(
+        original: Itmod<T>,
+        count: number | bigint,
+        getRandomInt?: (upperBound: number) => number
+    ) {
+        requireIntegerOrInfinity(count);
+        requireNonNegative(count);
+        super({ expensive: true }, () => {
+            let source = getDeepSource(original);
+            if (count === Infinity) return source;
+            if (count === 0) return emptyIterable();
+
+            let size = nonIteratedCountOrUndefined(source);
+            if (size === undefined) {
+                // convert source to an array
+                const array = toArray(source);
+                source = array;
+
+                // get length of the array
+                size = array.length;
+            }
+
+            const indexesToTake = range(size)
+                .shuffle(getRandomInt)
+                .take(count)
+                .asSet();
+
+            return from(source).filter((_, index) => indexesToTake.has(index));
+        });
+        this.original = original;
+        this._count = count;
+        this.getRandomInt = getRandomInt;
+    }
+
+    public get shuffle() {
+        const self = this;
+        const parentShuffle = super.shuffle;
+        return function shuffle(getRandomInt?: (upperBound: number) => number) {
+            if (self.getRandomInt === undefined && getRandomInt === undefined) {
+                return self.original.shuffle().take(self._count);
+            } else {
+                return parentShuffle(getRandomInt);
+            }
+        };
+    }
 }
 
 const _emptyItmod = new Itmod<any>({}, returns(emptyIterable()));
