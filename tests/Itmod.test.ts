@@ -1930,6 +1930,9 @@ const itmods = {
             ...from(itmods.oneThroughTen()).map(
                 (itmod) => () => itmod().max(0)
             ),
+            ...from(itmods.oneThroughTen()).map(
+                (itmod) => () => itmod().takeRandom(0)
+            ),
         ] as (() => Itmod<number>)[],
     oneThroughTen: () =>
         [
@@ -2127,6 +2130,10 @@ const numberItmodToItmodTests: ((itmod: Itmod<number>) => Itmod<any>)[] = [
     (itmods) => itmods.preConcat([1, 2, 3]),
     (itmods) => itmods.prepend(1),
     (itmods) => itmods.collapse(),
+    (itmod) => itmod.takeRandom(4, () => 0),
+    (itmod) => itmod.skipRandom(4, () => 0),
+    (itmod) => itmod.takeRandom(1, () => 0).shuffle(() => 0),
+    (itmod) => itmod.skipRandom(1, () => 0).shuffle(() => 0),
     (itmod) =>
         itmod.zip([-1, -2, -3, -4, -5, -6, -7, -8, -9, -10, -11, -12], {
             loose: true,
