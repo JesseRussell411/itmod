@@ -835,7 +835,7 @@ describe("nonIteratedCountOrUndefined", () => {
                     "expensive getSource was run by nonIteratedCountOrUndefined"
                 );
             },
-            { expensive: true }
+            { expensiveOrNonPure: true }
         );
         expect(itmod.nonIteratedCountOrUndefined()).toBe(undefined);
     });
@@ -1911,7 +1911,7 @@ const itmods = {
             () => fromObject({}),
             () => generate(0, (i) => i + 1),
             () => new Itmod({ fresh: true }, () => []),
-            () => new Itmod({ fresh: true, expensive: true }, () => []),
+            () => new Itmod({ fresh: true, expensiveOrNonPure: true }, () => []),
             ...from(itmods.oneThroughTen()).map(
                 (itmod) => () => itmod().take(0)
             ),
@@ -1954,12 +1954,12 @@ const itmods = {
             () => from(() => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], { fresh: true }),
             () =>
                 from(() => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], {
-                    expensive: true,
+                    expensiveOrNonPure: true,
                 }),
             () =>
                 from(() => [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], {
                     fresh: true,
-                    expensive: true,
+                    expensiveOrNonPure: true,
                 }),
             () =>
                 from(function* () {

@@ -89,7 +89,7 @@ export type ItmodProperties<_> = Readonly<
          * Calling the source getter is expensive, ie. it's more than an O(1) operation.
          * *OR* The source getter has side effects or the output changes if it's called more than once.
          */
-        expensive: boolean;
+        expensiveOrNonPure: boolean;
     }>
 >;
 
@@ -131,7 +131,10 @@ export default class Itmod<T> implements Iterable<T> {
         properties?: ItmodProperties<T>
     ): Itmod<T> {
         if (source instanceof Function) {
-            return new Itmod({ expensive: true, ...properties }, source);
+            return new Itmod(
+                { expensiveOrNonPure: true, ...properties },
+                source
+            );
         } else if (source instanceof Itmod && properties === undefined) {
             return source;
         } else {
@@ -151,7 +154,7 @@ export default class Itmod<T> implements Iterable<T> {
         properties: ItmodProperties<T> = {}
     ): Itmod<T> {
         if (source instanceof Function) {
-            return new Itmod({ expensive: true, ...properties }, () =>
+            return new Itmod({ expensiveOrNonPure: true, ...properties }, () =>
                 wrapIterator(source())
             );
         } else {
@@ -215,28 +218,33 @@ export default class Itmod<T> implements Iterable<T> {
             V
         ]
     > {
-        return new Itmod({ expensive: object instanceof Function }, () => {
-            const instance = resultOf(object);
+        return new Itmod(
+            { expensiveOrNonPure: object instanceof Function },
+            () => {
+                const instance = resultOf(object);
 
-            return Itmod.empty()
-                .if(includeStringKeys, (self) =>
-                    self.concat(Object.getOwnPropertyNames(instance))
-                )
-                .if(includeSymbolKeys, (self) =>
-                    self.concat(Object.getOwnPropertySymbols(instance))
-                )
-                .map(
-                    (key) =>
-                        [
-                            key,
-                            Object.getOwnPropertyDescriptor(instance, key)!,
-                        ] as const
-                )
-                .if(!includeNonEnumerable, (self) =>
-                    self.filter(([_, descriptor]) => !!descriptor?.enumerable)
-                )
-                .map(([key, descriptor]) => [key, descriptor.value]) as any;
-        });
+                return Itmod.empty()
+                    .if(includeStringKeys, (self) =>
+                        self.concat(Object.getOwnPropertyNames(instance))
+                    )
+                    .if(includeSymbolKeys, (self) =>
+                        self.concat(Object.getOwnPropertySymbols(instance))
+                    )
+                    .map(
+                        (key) =>
+                            [
+                                key,
+                                Object.getOwnPropertyDescriptor(instance, key)!,
+                            ] as const
+                    )
+                    .if(!includeNonEnumerable, (self) =>
+                        self.filter(
+                            ([_, descriptor]) => !!descriptor?.enumerable
+                        )
+                    )
+                    .map(([key, descriptor]) => [key, descriptor.value]) as any;
+            }
+        );
     }
 
     // TODO docs
@@ -1107,7 +1115,7 @@ export default class Itmod<T> implements Iterable<T> {
         return function takeFinal(count: number | bigint): Itmod<T> {
             requireIntegerOrInfinity(count);
             requireNonNegative(count);
-            return new Itmod({ fresh: true, expensive: true }, () => {
+            return new Itmod({ fresh: true, expensiveOrNonPure: true }, () => {
                 const source = self.getSource();
                 if (count === Infinity) return source;
                 if (isZero(count)) return emptyIterable();
@@ -1413,7 +1421,7 @@ export default class Itmod<T> implements Iterable<T> {
             start: number | bigint,
             end?: number | bigint
         ) {
-            return new Itmod({ expensive: true, fresh: true }, () => {
+            return new Itmod({ expensiveOrNonPure: true, fresh: true }, () => {
                 const array = self.toArray();
                 array.copyWithin(
                     Number(target),
@@ -1513,7 +1521,7 @@ export default class Itmod<T> implements Iterable<T> {
         const self = this;
         const externalNonIteratedCountOrUndefined = nonIteratedCountOrUndefined;
         return function nonIteratedCountOrUndefined() {
-            if (self.properties.expensive) return undefined;
+            if (self.properties.expensiveOrNonPure) return undefined;
             return externalNonIteratedCountOrUndefined(self.getSource());
         };
     }
@@ -1566,18 +1574,21 @@ export default class Itmod<T> implements Iterable<T> {
                 if (isZero(count)) return Itmod.empty<T>();
                 if (count === Infinity) return self.sort(order);
 
-                return new Itmod({ fresh: true, expensive: true }, () => {
-                    const source = self.getSource();
+                return new Itmod(
+                    { fresh: true, expensiveOrNonPure: true },
+                    () => {
+                        const source = self.getSource();
 
-                    const result = new SortedSequence<T>(order, {
-                        maxSize: Number(count),
-                        keep: "least",
-                    });
+                        const result = new SortedSequence<T>(order, {
+                            maxSize: Number(count),
+                            keep: "least",
+                        });
 
-                    result.pushMany(source);
+                        result.pushMany(source);
 
-                    return result;
-                });
+                        return result;
+                    }
+                );
             } else {
                 const [order = autoComparator] = args;
                 const comparator = asComparator(order);
@@ -1617,18 +1628,21 @@ export default class Itmod<T> implements Iterable<T> {
                 if (isZero(count)) return Itmod.empty<T>();
                 if (count === Infinity) return self.sort(order);
 
-                return new Itmod({ fresh: true, expensive: true }, () => {
-                    const source = self.getSource();
+                return new Itmod(
+                    { fresh: true, expensiveOrNonPure: true },
+                    () => {
+                        const source = self.getSource();
 
-                    const result = new SortedSequence<T>(order, {
-                        maxSize: Number(count),
-                        keep: "greatest",
-                    });
+                        const result = new SortedSequence<T>(order, {
+                            maxSize: Number(count),
+                            keep: "greatest",
+                        });
 
-                    result.pushMany(source);
+                        result.pushMany(source);
 
-                    return result;
-                });
+                        return result;
+                    }
+                );
             } else {
                 const [order = autoComparator] = args;
                 const comparator = asComparator(order);
@@ -1665,7 +1679,7 @@ export default class Itmod<T> implements Iterable<T> {
         return function indexBy<K>(
             keySelector: (item: T, index: number) => K
         ): Itmod<[K, T]> {
-            return new Itmod({ expensive: true, fresh: true }, () =>
+            return new Itmod({ expensiveOrNonPure: true, fresh: true }, () =>
                 self.toMap(keySelector, identity)
             );
         };
@@ -2266,7 +2280,7 @@ export default class Itmod<T> implements Iterable<T> {
     public get shuffle() {
         const self = this;
         return function shuffle(getRandomInt?: (upperBound: number) => number) {
-            return new Itmod({ fresh: true, expensive: true }, () => {
+            return new Itmod({ fresh: true, expensiveOrNonPure: true }, () => {
                 const array = self.toArray();
                 fisherYatesShuffle(array, getRandomInt);
                 return array;
@@ -2357,20 +2371,23 @@ export default class Itmod<T> implements Iterable<T> {
             let [start = "", separator = "", end = ""] =
                 args.length <= 1 ? ["", args[0], ""] : args;
 
-            const source = self.getSource();
-
-            if (typeof source === "string" && separator === "") {
-                // This check may or may not be necessary. I have no way to test if it is.
-                // Other than by testing memory usage maybe? Or can you do a heap dump in javascript?
-                // maybe use the debugger
-                if (start === "" && end === "") {
-                    return source;
-                } else {
-                    return start + source + end;
+            if (separator === "") {
+                const source = self.getSource();
+                if (typeof source === "string") {
+                    // This check may or may not be necessary. I have no way to test if it is.
+                    // Other than by testing memory usage maybe? Or can you do a heap dump in javascript?
+                    // maybe use the debugger
+                    if (start === "" && end === "") {
+                        return source;
+                    } else {
+                        return start + source + end;
+                    }
+                } else if (self.properties.expensiveOrNonPure) {
+                    return start + asArray(source).join(separator) + end;
                 }
             }
 
-            return start + asArray(source).join(separator) + end;
+            return start + self.asArray().join(separator) + end;
         };
     }
 }
@@ -2383,7 +2400,7 @@ export class SortedItmod<T> extends Itmod<T> {
     private readonly orders: readonly Order<T>[];
     private readonly comparator: Comparator<T>;
     public constructor(original: Itmod<T>, orders: readonly Order<T>[]) {
-        super({ fresh: true, expensive: true }, () => {
+        super({ fresh: true, expensiveOrNonPure: true }, () => {
             const array = original.toArray();
             array.sort(comparator);
             return array;
@@ -2750,7 +2767,7 @@ export class MappedItmod<T, R> extends Itmod<R> {
 export class ReversedItmod<T> extends Itmod<T> {
     protected readonly original: Itmod<T>;
     public constructor(original: Itmod<T>) {
-        super({ expensive: true }, () => {
+        super({ expensiveOrNonPure: true }, () => {
             const source = original.getSource();
 
             if (source instanceof Collection) {
@@ -2926,6 +2943,51 @@ export class RepeatedItmod<T> extends Itmod<T> {
             }
         };
     }
+
+    public get toArray() {
+        const self = this;
+        if (self.times <= 1) return self.original.toArray;
+        return function toArray() {
+            const result = self.original.toArray();
+            if (result.length === 0) return result;
+
+            const times = Number(self.times);
+
+            let currentLength = result.length;
+            const desiredLength = currentLength * times;
+            result.length = desiredLength;
+
+            const desiredLength_floorDiv2 = Math.trunc(desiredLength / 2);
+
+            while (true) {
+                if (currentLength <= desiredLength_floorDiv2) {
+                    result.copyWithin(currentLength, 0, currentLength);
+                    currentLength *= 2;
+                } else {
+                    result.copyWithin(
+                        currentLength,
+                        0,
+                        desiredLength - currentLength
+                    );
+                    currentLength = desiredLength; // *Even though currentLength isn't used after this line, keeping it correct will make this code more robust. The optimizer will probably recognize this an an unnecessary line anyway, and not actually include it in compiled output.
+                    break;
+                }
+            }
+
+            return result;
+        };
+    }
+
+    public get asArray() {
+        return this.toArray;
+    }
+
+    public get makeString(): Itmod<T>["makeString"] {
+        const self = this;
+        return function makeString(...args: any) {
+            return (from(self.asArray()).makeString as any)(...args);
+        } as any;
+    }
 }
 
 export class FlattenedItmod<T> extends Itmod<
@@ -3035,7 +3097,7 @@ export class GroupedItmod<
         super(
             {
                 fresh: true,
-                expensive: true,
+                expensiveOrNonPure: true,
             },
             () => {
                 return groupByRecursive(
@@ -3129,7 +3191,7 @@ export class TakeRandomItmod<T> extends Itmod<T> {
     ) {
         requireIntegerOrInfinity(count);
         requireNonNegative(count);
-        super({ expensive: true }, () => {
+        super({ expensiveOrNonPure: true }, () => {
             if (count === 0) return emptyIterable();
             let size = original.nonIteratedCountOrUndefined(); // take advantage of certain optimizations
 
@@ -3199,7 +3261,7 @@ export class SkipRandomItmod<T> extends Itmod<T> {
     ) {
         requireIntegerOrInfinity(count);
         requireNonNegative(count);
-        super({ expensive: true }, () => {
+        super({ expensiveOrNonPure: true }, () => {
             if (count === Infinity) return emptyIterable();
             let size = original.nonIteratedCountOrUndefined();
             let source = getDeepSource(original);
