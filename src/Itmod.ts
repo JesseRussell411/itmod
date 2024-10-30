@@ -70,6 +70,9 @@ import { ReturnTypes } from "./types/functions";
 
 // TODO remove all uses of any, unless absolutely necessary
 
+// TODO multistream map function
+// TODO general purpose multi streaming
+
 // design note: the purpose of every method being an accessor (get) is to bind "this" on each method without making them fields and making every instance of Itmod take loads of memory just to exist.
 
 // #1 rule of optimizations: you can cheat as long as you don't get caught!
