@@ -3308,6 +3308,61 @@ export class SkipRandomItmod<T> extends Itmod<T> {
     // TODO overload take
 }
 
+export class RangeItmod<
+    Start extends number | bigint,
+    End extends number | bigint,
+    Step extends number | bigint
+> extends Itmod<
+    Start extends bigint
+        ? End extends bigint
+            ? Step extends bigint
+                ? bigint
+                : number
+            : number
+        : number
+> {
+    protected readonly start: Start;
+    protected readonly end: End;
+    protected readonly step: Step;
+
+    public constructor(
+        start: number | bigint,
+        end: number | bigint,
+        step: number | bigint
+    ) {
+        super({}, function* () {
+            let _start = start;
+            let _end = end;
+            // shut up typescript
+            let _step = step as any;
+            const useNumber =
+                typeof _start === "number" ||
+                typeof _end === "number" ||
+                typeof _step === "number";
+            
+            const ZERO = useNumber ? 0 : (0n as any);
+    
+            if (useNumber) {
+                _start = Number(_start);
+                _end = Number(_end);
+                _step = Number(_step);
+            }
+
+            if (_step === ZERO) throw new Error("arg3 must not be zero");
+
+            if (_step < ZERO && _start < _end) return Itmod.empty<any>();
+            if (_step > ZERO && _start > _end) return Itmod.empty<any>();
+
+            const test =
+                _step > ZERO ? (i: any) => i < _end : (i: any) => i > _end;
+
+            return new Itmod({}, function* () {
+                for (let i = _start; test(i); i += _step) yield i;
+            });
+        });
+    }
+}
+
 const _emptyItmod = new Itmod<any>({}, returns(emptyIterable()));
 
 /**
@@ -3407,7 +3462,7 @@ function split<T, O>(
                 } else {
                     d = 0;
                 }
-
+                
                 if (d >= delim.length) {
                     chunk.length -= delim.length;
 
