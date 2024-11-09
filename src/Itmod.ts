@@ -3326,15 +3326,15 @@ export class RangeItmod<
     protected readonly step: Step;
 
     public constructor(
-        start: number | bigint,
-        end: number | bigint,
-        step: number | bigint
+        start: Start,
+        end: End,
+        step: Step
     ) {
         super({}, function* () {
-            let _start = start;
-            let _end = end;
+            let _start: any = start;
+            let _end: any = end;
             // shut up typescript
-            let _step = step as any;
+            let _step: any = step as any;
             const useNumber =
                 typeof _start === "number" ||
                 typeof _end === "number" ||
@@ -3360,6 +3360,10 @@ export class RangeItmod<
                 for (let i = _start; test(i); i += _step) yield i;
             });
         });
+        this.start = start;
+        this.end = end;
+        this.step = step;
+
     }
 }
 
