@@ -284,7 +284,8 @@ export default class CircularBuffer<T> extends Collection<T> {
      * Deletes all elements from the buffer.
      */
     public clear() {
-        this.data = new Array(this.maxSize);
+        this.data.length = 0;
+        this.data.length = this.maxSize;
         this.offset = 0;
         this.size = 0;
     }
