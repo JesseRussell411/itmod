@@ -284,15 +284,16 @@ export default class CircularBuffer<T> extends Collection<T> {
      * Deletes all elements from the buffer.
      */
     public clear() {
+        this.size = 0;
+        this.offset = 0;
+
+        const maxSize = this.data.length;
         this.data.length = 0;
-        this.data.length = this.maxSize;
+        this.data.length = maxSize;
 
         // why actually clear data?
         // so that old references aren't left over
         // if an object is pointed to by data only, that object won't be garbage collected even though it isn't actually needed.
-
-        this.offset = 0;
-        this.size = 0;
     }
 
     /**
