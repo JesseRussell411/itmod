@@ -297,15 +297,13 @@ export default class CircularBuffer<T> extends Collection<T> {
     }
 
     /**
-     * Appends the elements to the end of the buffer (which would be removed by {@link pop}).
-     * Removing elements from the start if the buffer is full.
+     * Appends the item to the end of the buffer (which would be removed by {@link pop}).
+     * Removes an item from the start if the buffer is full.
      */
-    public push(...elements: readonly T[]): void {
+    public push(item: T): void {
         if (this.maxSize === 0) return;
-        for (const item of elements) {
-            this.incrementFinalIndex();
-            this.data[this.finalIndex] = item;
-        }
+        this.incrementFinalIndex();
+        this.data[this.finalIndex] = item;
     }
 
     /**
@@ -319,16 +317,13 @@ export default class CircularBuffer<T> extends Collection<T> {
     }
 
     /**
-     * Appends the element to the start of the buffer (which would be removed by {@link shift}).
-     * Removes the final element if the buffer was full.
+     * Appends the item to the start of the buffer (which would be removed by {@link shift}).
+     * Removes an item from the end if buffer is full.
      */
-    public unshift(...items: readonly T[]): void {
+    public unshift(item: T): void {
         if (this.maxSize === 0) return;
-        for (let i = items.length - 1; i >= 0; i--) {
-            const item = items[i] as T;
-            this.decrementFirstIndex();
-            this.data[this.firstIndex] = item;
-        }
+        this.decrementFirstIndex();
+        this.data[this.firstIndex] = item;
     }
 
     /**
