@@ -3325,11 +3325,7 @@ export class RangeItmod<
     protected readonly end: End;
     protected readonly step: Step;
 
-    public constructor(
-        start: Start,
-        end: End,
-        step: Step
-    ) {
+    public constructor(start: Start, end: End, step: Step) {
         super({}, function* () {
             let _start: any = start;
             let _end: any = end;
@@ -3339,9 +3335,9 @@ export class RangeItmod<
                 typeof _start === "number" ||
                 typeof _end === "number" ||
                 typeof _step === "number";
-            
+
             const ZERO = useNumber ? 0 : (0n as any);
-    
+
             if (useNumber) {
                 _start = Number(_start);
                 _end = Number(_end);
@@ -3363,7 +3359,6 @@ export class RangeItmod<
         this.start = start;
         this.end = end;
         this.step = step;
-
     }
 }
 
@@ -3466,7 +3461,7 @@ function split<T, O>(
                 } else {
                     d = 0;
                 }
-                
+
                 if (d >= delim.length) {
                     chunk.length -= delim.length;
 
@@ -3534,23 +3529,116 @@ function groupJoinByComparison<O, I, R>(
     };
 }
 
-function joinByKey<A, B, K, R>(
+function crossJoin<A, B, R>(
     left: Iterable<A>,
     right: Iterable<B>,
-    leftKeySelector: (item: A) => K,
-    rightKeySelector: (item: B) => K,
-    resultSelector: (left: A, right: B | undefined) => R,
-    inner: boolean
+    resultSelector: (left: A, right: B) => R
 ): Iterable<R> {
     return {
         *[Symbol.iterator]() {
-            const rightIndexed = indexBy(right, rightKeySelector);
-            for (const item of left) {
-                const key = leftKeySelector(item);
-                if (!inner || rightIndexed.has(key)) {
-                    const rightItem = rightIndexed.get(key);
-                    const result = resultSelector(item, rightItem);
-                    yield result;
+            const rightCached = cachingIterable(right);
+
+            for (const leftValue of left) {
+                for (const rightValue of rightCached) {
+                    yield resultSelector(leftValue, rightValue);
+                }
+            }
+        },
+    };
+}
+
+function joinByKey<
+    L,
+    R,
+    K,
+    J,
+    S extends "inner" | "left" | "full outer" | "outer"
+>(
+    left: Iterable<L>,
+    right: Iterable<R>,
+    leftKeySelector: (item: L) => K,
+    rightKeySelector: (item: R) => K,
+    joiner: S extends "inner"
+        ? (left: L, right: R) => J
+        : S extends "left"
+        ? (left: L, right: R | undefined) => J
+        : S extends "outer"
+        ?
+              | ((left: L | undefined, right: R) => J)
+              | ((left: L, right: R | undefined) => J)
+        : (left: L | undefined, right: R | undefined) => J,
+    strategy: S
+): Iterable<J> {
+    return {
+        *[Symbol.iterator]() {
+            const rightIndex = new Map<K, R[]>();
+            const unmatchedRight =
+                strategy === "full outer" || strategy === "outer"
+                    ? new Set<K>()
+                    : undefined;
+
+            for (const leftValue of left) {
+                let matchFound = false;
+
+                const key = leftKeySelector(leftValue);
+
+                // region check cache
+                const rightGroup = rightIndex.get(key);
+                if (rightGroup !== undefined) {
+                    matchFound = true;
+                    if (unmatchedRight !== undefined) {
+                        unmatchedRight.delete(key);
+                    }
+
+                    if (strategy !== "outer") {
+                        for (const rightValue of rightGroup) {
+                            yield joiner(leftValue, rightValue);
+                        }
+                    }
+                }
+                // end region
+
+                // region find matching right
+                for (const rightValue of right) {
+                    const rightKey = rightKeySelector(rightValue);
+                    if (key === rightKey) {
+                        matchFound = true;
+                        if (strategy !== "outer") {
+                            yield joiner(leftValue, rightValue);
+                        }
+                    } else if (unmatchedRight !== undefined) {
+                        unmatchedRight.add(rightKey);
+                    }
+
+                    // region build cache
+                    const rightGroup = rightIndex.get(rightKey);
+                    if (rightGroup !== undefined) {
+                        rightGroup.push(rightValue);
+                    } else {
+                        rightIndex.set(rightKey, [rightValue]);
+                    }
+                    // end region
+                }
+                // end region
+
+                if (
+                    !matchFound &&
+                    (strategy === "left" ||
+                        strategy === "full outer" ||
+                        strategy === "outer")
+                ) {
+                    yield (joiner as any)(leftValue, undefined);
+                }
+            }
+
+            if (
+                unmatchedRight !== undefined &&
+                (strategy === "full outer" || strategy === "outer")
+            ) {
+                for (const rightKey of unmatchedRight) {
+                    for (const rightValue of rightIndex.get(rightKey)!) {
+                        return (joiner as any)(undefined, rightValue);
+                    }
                 }
             }
         },
