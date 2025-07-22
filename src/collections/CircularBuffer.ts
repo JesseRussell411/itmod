@@ -1,6 +1,7 @@
 import { requireNonNegative, requireSafeInteger } from "../checks";
 import Collection from "./Collection";
 import { isArray } from "./is";
+import { toArray } from "./to";
 
 /**
  * Buffer of limited size that can shift, unshift, push, and pop elements equally efficiently. Elements can be added until the maximum size is reached; whereupon, elements on the opposite side of the buffer are removed to make room.
@@ -291,10 +292,10 @@ export default class CircularBuffer<T> extends Collection<T> {
 
                 const dstStart = boundAdd(this.maxSize, this.finalIndex + 1, items.length)
 
-                const startSrclength = this.maxSize - dstStart
+                const startSrcLength = this.maxSize - dstStart
                 
-                arrayCopy(items, this.data, srcStart, dstStart, startSrclength)
-                arrayCopy(items, this.data, srcStart + startSrclength, 0, this.maxSize - startSrclength)
+                arrayCopy(items, this.data, srcStart, dstStart, startSrcLength)
+                arrayCopy(items, this.data, srcStart + startSrcLength, 0, this.maxSize - startSrcLength)
                 this.size = this.maxSize;
                 this.offset = dstStart;
             } else {
@@ -303,13 +304,14 @@ export default class CircularBuffer<T> extends Collection<T> {
 
                 if (items.length <= remainingSpace) {
                     arrayCopy(items, this.data, 0, this.finalIndex + 1, items.length);
-                } else if (remainingSpace === 0){
+                } else if (remainingSpace === 0) {
                     arrayCopy(items, this.data, 0, 0, items.length)
                     this.offset = 0;
                 } else {
                     arrayCopy(items, this.data, 0, this.finalIndex + 1, remainingSpace);
                     arrayCopy(items, this.data, remainingSpace, 0, items.length - remainingSpace)
                 }
+
                 if (items.length > remainingSize) {
                     this._size = this.maxSize;
 
@@ -317,12 +319,50 @@ export default class CircularBuffer<T> extends Collection<T> {
                 } else {
                     this._size += items.length;
                 }
-
             }
         } else {
             for (const item of items) {
                 this.push(item);
             }
+        }
+    }
+
+    public unshiftMany(items: Iterable<T>): void {
+        // items kinda' has to be an array for this to work
+        if (!isArray(items)) return this.unshiftMany(toArray(items));
+
+        if (items.length > this.maxSize) {
+            const dstStart = boundSubtract(this.maxSize, this.firstIndex, items.length);
+
+            const startSrcLength = this.maxSize - dstStart
+            
+            arrayCopy(items, this.data, 0, dstStart, startSrcLength)
+            arrayCopy(items, this.data, startSrcLength, 0, this.maxSize - startSrcLength)
+            this.size = this.maxSize;
+            this.offset = dstStart;
+        } else {
+            const remainingSpace = this.offset
+            const remainingSize = this.maxSize - this.size
+
+            if (items.length <= remainingSpace) {
+                arrayCopy(items, this.data, 0, this.offset - items.length, items.length);
+            } else if (remainingSpace === 0) {
+                arrayCopy(items, this.data, 0, this.maxSize - items.length, items.length)
+            } else {
+                arrayCopy(items, this.data, items.length - remainingSpace, 0, remainingSpace);
+                arrayCopy(items, this.data, items.length - remainingSpace - 1, this.maxSize -(items.length - remainingSpace), items.length - remainingSpace)
+            }
+
+            if (items.length > remainingSize) {
+                // TODO
+                this._size = this.maxSize;
+
+                this.offset = this.subtractFromIndex(this.offset, items.length - remainingSize);
+            } else {
+                // TODO
+                this._size += items.length;
+            }
+
         }
     }
 
@@ -579,8 +619,8 @@ console.log("---")
 
 
 function boundAdd(bound: number, a: number, b: number) : number {
-    if (a < 0) a = boundSubtract(0, -a, bound);
-    if (b < 0) b = boundSubtract(0, -b, bound);
+    if (a < 0) a = boundSubtract(bound, 0, -a);
+    if (b < 0) b = boundSubtract(bound, 0, -b);
     a %= bound;
     b %= bound;
     if (b >= (bound - a)){
@@ -590,12 +630,23 @@ function boundAdd(bound: number, a: number, b: number) : number {
 }
 
 function boundSubtract(bound: number, a: number, b: number): number {
-    if (a < 0) a = boundSubtract(0, -a, bound);
-    if (b < 0) b = boundSubtract(0, -b, bound);
+    if (a < 0) a = boundSubtract(bound, 0, -a);
+    if (b < 0) b = boundSubtract(bound, 0, -b);
     a %= bound;
     b %= bound;
-    if (b > a){
+    if (b > a) {
         return bound - (b - a);
     }
     return a - b
 }
+
+c = new CircularBuffer(5)
+c.pushMany([0,1,2,3,4,5])
+c2 = c.clone()
+a = []
+for(let i = 0; i >= -27; i--) a.push(i);
+
+for (let n of a) c.unshift(n);
+c2.unshiftMany([...a].reverse());
+console.log(c);
+console.log(c2);
