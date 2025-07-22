@@ -1,5 +1,6 @@
 import { requireNonNegative, requireSafeInteger } from "../checks";
 import Collection from "./Collection";
+import { isArray } from "./is";
 
 /**
  * Buffer of limited size that can shift, unshift, push, and pop elements equally efficiently. Elements can be added until the maximum size is reached; whereupon, elements on the opposite side of the buffer are removed to make room.
@@ -177,33 +178,6 @@ export default class CircularBuffer<T> extends Collection<T> {
             //         ^
             //          \__end section
 
-            /**
-             * Copies data from one array to another.
-             *
-             * *Note* that there are no constraints on the inputs as this function is expected to be used
-             * in CircularBuffer's toArray function only, where it will only receive sensical arguments.
-             */
-            function arrayCopy<T>(
-                src: T[],
-                dst: T[],
-                srcStart: number,
-                dstStart: number,
-                length: number
-            ) {
-                // SOMEHOW this is faster than using any build in library functions
-                for (let i = 0; i < length; i++) {
-                    dst[dstStart + i] = src[srcStart + i]!;
-                }
-
-                // I think the interpreter knows what I'm trying to do
-                // and just uses memcpy instead.
-                // I hope.
-                //
-                // In the end, this makes the toArray function about as fast
-                // as copying an actual array, as in: [...array].
-                //
-                // a little slower -- 1100ms vs 1400ms
-            }
 
             const result = new Array(length);
 
@@ -311,10 +285,73 @@ export default class CircularBuffer<T> extends Collection<T> {
      * Removing elements from the start if the buffer is full.
      */
     public pushMany(items: Iterable<T>): void {
-        for (const item of items) {
-            this.push(item);
+        if (isArray(items)) {
+            if (items.length >= this.maxSize) {
+                const srcStart = items.length - this.maxSize
+
+                const dstStart = boundAdd(this.maxSize, this.finalIndex + 1, items.length)
+
+                const startSrclength = this.maxSize - dstStart
+                
+                arrayCopy(items, this.data, srcStart, dstStart, startSrclength)
+                arrayCopy(items, this.data, srcStart + startSrclength, 0, this.maxSize - startSrclength)
+                this.size = this.maxSize;
+                this.offset = dstStart;
+            } else {
+                const remainingSpace = this.maxSize - 1 - this.finalIndex;
+                const remainingSize = this.maxSize - this.size
+
+                if (items.length <= remainingSpace) {
+                    arrayCopy(items, this.data, 0, this.finalIndex + 1, items.length);
+                } else if (remainingSpace === 0){
+                    arrayCopy(items, this.data, 0, 0, items.length)
+                    this.offset = 0;
+                } else {
+                    arrayCopy(items, this.data, 0, this.finalIndex + 1, remainingSpace);
+                    arrayCopy(items, this.data, remainingSpace, 0, items.length - remainingSpace)
+                }
+                if (items.length > remainingSize) {
+                    this._size = this.maxSize;
+
+                    this.offset = this.addToIndex(this.offset, items.length - remainingSize);
+                } else {
+                    this._size += items.length;
+                }
+
+            }
+        } else {
+            for (const item of items) {
+                this.push(item);
+            }
         }
     }
+
+    private addToIndex(index: number, plus: number): number {
+        if (plus < 0) return this.subtractFromIndex(index, -plus);
+        if (index < 0) index = this.subtractFromIndex(0, -index)
+        plus %= this.maxSize;
+        index %= this.maxSize;
+
+        if (plus >= (this.maxSize - index)) {
+            return plus - (this.maxSize - index);
+        }
+
+        return index + plus
+    }
+
+    private subtractFromIndex(index: number, minus: number): number {
+        if (minus < 0) return this.addToIndex(index, -minus);
+        if (index < 0) index - this.subtractFromIndex(0, -index);
+        minus %= this.maxSize
+        index %= this.maxSize
+
+        if (minus > index) {
+            return this.maxSize - (minus - index);
+        }
+
+        return index - minus;
+    }
+    
 
     /**
      * Appends the item to the start of the buffer (which would be removed by {@link shift}).
@@ -484,4 +521,81 @@ export default class CircularBuffer<T> extends Collection<T> {
             this.offset--;
         }
     }
+}
+
+/**
+ * Copies data from one array to another.
+ *
+ * *Note* that there are no constraints on the inputs as this function is expected to be used where it will only receive sensical arguments.
+ */
+function arrayCopy<T>(
+    src: readonly T[],
+    dst: T[],
+    srcStart: number,
+    dstStart: number,
+    length: number
+) {
+    // SOMEHOW this is faster than using any build in library functions
+    for (let i = 0; i < length; i++) {
+        dst[dstStart + i] = src[srcStart + i]!;
+    }
+
+    // I think the interpreter knows what I'm trying to do
+    // and just uses memcpy instead.
+    // I hope.
+    //
+    // In the end, this makes the toArray function about as fast
+    // as copying an actual array, as in: [...array].
+    //
+    // a little slower -- 1100ms vs 1400ms
+}
+
+
+
+
+export let c = new CircularBuffer(3)
+export let c2 = new CircularBuffer(3)
+c.push(1)
+c.push(2)
+
+c2.pushMany([1,2])
+
+console.log("----")
+console.log(c)
+console.log(c2)
+console.log("----")
+
+let a = []
+for (let i = 3; i < 11; i++) a.push(i);
+console.log(a)
+console.log("----")
+
+for(let n of a) c.push(n);
+
+c2.pushMany(a)
+console.log(c)
+console.log(c2)
+console.log("---")
+
+
+function boundAdd(bound: number, a: number, b: number) : number {
+    if (a < 0) a = boundSubtract(0, -a, bound);
+    if (b < 0) b = boundSubtract(0, -b, bound);
+    a %= bound;
+    b %= bound;
+    if (b >= (bound - a)){
+        return b - (bound - a);
+    }
+    return a + b
+}
+
+function boundSubtract(bound: number, a: number, b: number): number {
+    if (a < 0) a = boundSubtract(0, -a, bound);
+    if (b < 0) b = boundSubtract(0, -b, bound);
+    a %= bound;
+    b %= bound;
+    if (b > a){
+        return bound - (b - a);
+    }
+    return a - b
 }
