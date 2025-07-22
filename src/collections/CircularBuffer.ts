@@ -315,7 +315,7 @@ export default class CircularBuffer<T> extends Collection<T> {
                 if (items.length > remainingSize) {
                     this._size = this.maxSize;
 
-                    this.offset = this.addToIndex(this.offset, items.length - remainingSize);
+                    this.offset = boundAdd(this.maxSize, this.offset, items.length - remainingSize);
                 } else {
                     this._size += items.length;
                 }
@@ -357,12 +357,13 @@ export default class CircularBuffer<T> extends Collection<T> {
                 // TODO
                 this._size = this.maxSize;
 
-                this.offset = this.subtractFromIndex(this.offset, items.length - remainingSize);
+                this.offset = boundSubtract(this.maxSize, this.offset, items.length - remainingSize);
             } else {
                 // TODO
                 this._size += items.length;
-            }
 
+                this.offset = boundSubtract(this.maxSize, this.offset, items.length);
+            }
         }
     }
 
